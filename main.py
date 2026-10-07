@@ -5,6 +5,9 @@ import sys
 import socket
 import ssl
 import smtplib
+import re
+from html import unescape
+from html.parser import HTMLParser
 from email.mime.text import MIMEText
 
 try:
@@ -95,77 +98,130 @@ senior_keywords = [
 ]
 
 
-frontend_keywords = [
-    "junior frontend developer",
-    "junior web developer",
-    "junior react developer",
-    "entry-level frontend developer",
-    "entry level frontend developer",
-    "frontend developer",
-    "front-end developer",
-    "front end developer",
-    "react developer",
-    "javascript developer",
-    "web developer",
-    "ui developer"
-]
-
-
 junior_keywords = ["junior", "entry level", "graduate", "trainee", "intern"]
+
+
+class JobDescriptionParser(HTMLParser):
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+        self.skip_depth = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in {"script", "style"}:
+            self.skip_depth += 1
+        elif tag in {"br", "p", "div", "li", "h1", "h2", "h3", "tr"}:
+            self.parts.append(" ")
+
+    def handle_endtag(self, tag):
+        if tag in {"script", "style"} and self.skip_depth:
+            self.skip_depth -= 1
+        elif tag in {"p", "div", "li", "h1", "h2", "h3", "tr"}:
+            self.parts.append(" ")
+
+    def handle_data(self, data):
+        if not self.skip_depth:
+            self.parts.append(data)
+
+
+def get_description_text(description):
+
+    description = str(description or "")
+    for _ in range(3):
+        decoded_description = unescape(description)
+        if decoded_description == description:
+            break
+        description = decoded_description
+
+    parser = JobDescriptionParser()
+    parser.feed(description)
+    return re.sub(r"\s+", " ", " ".join(parser.parts)).strip()
+
+
+def is_senior_job(job):
+
+    title = str(job.get("title") or "").lower()
+    description = get_description_text(job.get("description")).lower()
+
+    if any(keyword in title for keyword in senior_keywords):
+        return True
+
+    explicit_senior_phrases = [
+        r"\bthis is (?:a|an )?(?:senior|lead|principal|staff)\b",
+        r"\b(?:senior|lead|principal|staff)(?:[- ]level)?"
+        r"(?:\s+(?:engineering|software|frontend|front-end|front end|web))?"
+        r"\s+(?:role|position|job)\b",
+        r"\b(?:role|position|job)\s+is\s+(?:a|an )?"
+        r"(?:senior|lead|principal|staff)\b"
+    ]
+    return any(
+        re.search(pattern, description)
+        for pattern in explicit_senior_phrases
+    )
+
+
+def is_remote_work_arrangement(job):
+
+    title = str(job.get("title") or "").lower()
+    description = get_description_text(job.get("description")).lower()
+    work_details = f"{title} {description}"
+
+    non_remote_patterns = [
+        r"\bhybrid(?:\s+(?:work|working|role|schedule|model|approach))?\b",
+        r"\bon[- ]site\b",
+        r"\bonsite\b",
+        r"\bin[- ]office\b",
+        r"\boffice[- ]based\b",
+        r"\bremote work\s+(?:is\s+)?not\s+(?:available|offered|possible)\b",
+        r"\bnot\s+(?:a\s+)?fully remote\b"
+    ]
+    return not any(
+        re.search(pattern, work_details)
+        for pattern in non_remote_patterns
+    )
 
 
 def is_relevant_frontend_job(job):
 
     title = str(job.get("title") or "").lower()
-    description = str(job.get("description") or "").lower()
 
     if not title:
         return False
 
-    if any(keyword in title for keyword in senior_keywords):
+    if is_senior_job(job) or not is_remote_work_arrangement(job):
         return False
 
     negative_role_keywords = [
-        "backend developer",
+        "backend",
         "devops",
         "data scientist",
-        "machine learning engineer",
-        "mobile developer",
-        "ios developer",
-        "android developer"
+        "machine learning",
+        "mobile",
+        "ios",
+        "android"
     ]
 
     if any(keyword in title for keyword in negative_role_keywords):
         return False
 
-    title_matches = any(
-        keyword in title
-        for keyword in frontend_keywords
+    frontend_title_signals = [
+        "frontend",
+        "front-end",
+        "front end",
+        "web developer",
+        "web engineer",
+        "react developer",
+        "javascript developer",
+        "ui developer",
+        "ui engineer"
+    ]
+
+    is_development_role = "developer" in title or "engineer" in title
+    return is_development_role and any(
+        signal in title
+        for signal in frontend_title_signals
     )
-
-    if title_matches:
-        return True
-
-    tech_match = any(
-        keyword in title
-        for keyword in ["react", "javascript", "typescript", "html", "css"]
-    )
-
-    junior_signal = any(
-        keyword in title
-        for keyword in junior_keywords
-    )
-
-    if tech_match and ("web" in title or "frontend" in title or "ui" in title or "developer" in title):
-        return True
-
-    if junior_signal and ("web" in title or "frontend" in title or "ui" in title or "developer" in title):
-        return True
-
-    if "frontend" in description and "junior" in description:
-        return True
-
-    return False
 
 
 def get_match_category(score):
@@ -216,6 +272,44 @@ def build_email_body(jobs):
         lines.append("")
 
     return "\n".join(lines).strip()
+
+
+def show_new_job_notification(jobs):
+
+    if not jobs:
+        return
+
+    import tkinter as tk
+    from tkinter import messagebox
+
+    job_lines = []
+    for job in jobs[:8]:
+        job_lines.extend([
+            str(job.get("title") or "Untitled job"),
+            f"Company: {job.get('company') or 'Unknown'}",
+            f"Location: {job.get('location') or 'Not specified'}",
+            f"Score: {job.get('score', 0)} — {job.get('match_category', 'Unknown')}",
+            f"Apply: {job.get('url') or 'Link not available'}",
+            ""
+        ])
+
+    if len(jobs) > 8:
+        job_lines.append(f"...and {len(jobs) - 8} more new jobs.")
+
+    root = None
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showinfo(
+            title=f"{len(jobs)} new Remote Job Finder match(es)",
+            message="\n".join(job_lines).strip(),
+            parent=root
+        )
+    except tk.TclError as exc:
+        print(f"Desktop notification could not be shown: {exc}")
+    finally:
+        if root is not None:
+            root.destroy()
 
 
 def create_ipv4_connection(host, port, timeout, source_address=None):
@@ -351,93 +445,71 @@ def calculate_score(job):
     title = str(job.get("title") or "").lower()
     description = str(job.get("description") or "").lower()
 
-    score = 0
+    # Description keywords cannot turn an unrelated title into a strong match.
+    if not is_relevant_frontend_job(job):
+        return 0
 
-    # A. Title relevance - strongest signal
-    title_role_points = {
-        "junior frontend developer": 12,
-        "junior web developer": 12,
-        "junior react developer": 12,
-        "entry-level frontend developer": 11,
-        "entry level frontend developer": 11,
-        "frontend developer": 10,
-        "front-end developer": 10,
-        "front end developer": 10,
+    role_keywords = {
+        "junior frontend developer": 10,
+        "junior web developer": 10,
+        "junior react developer": 10,
+        "entry-level frontend developer": 10,
+        "entry level frontend developer": 10,
+        "frontend developer": 9,
+        "front-end developer": 9,
+        "front end developer": 9,
+        "frontend engineer": 9,
+        "front-end engineer": 9,
         "react developer": 9,
         "javascript developer": 8,
         "web developer": 8,
-        "ui developer": 8
+        "web engineer": 7,
+        "ui developer": 7,
+        "ui engineer": 7
     }
 
-    for keyword, points in title_role_points.items():
+    role_score = 0
+    for keyword, points in role_keywords.items():
         if keyword in title:
-            score += points
+            role_score = points
+            break
 
-    # B. Technology keywords. Title mentions are stronger than description mentions.
+    if role_score == 0 and ("frontend" in title or "front-end" in title or "front end" in title):
+        role_score = 7
+
+    score = role_score
+
     tech_points = {
-        "react": 4,
-        "javascript": 4,
-        "typescript": 3,
-        "html": 2,
-        "css": 2,
-        "git": 2,
-        "github": 2,
-        "node.js": 3,
-        "rest api": 3,
-        "dom": 2
+        "react": 2,
+        "javascript": 2,
+        "typescript": 2,
+        "html": 1,
+        "css": 1,
+        "git": 1,
+        "github": 1,
+        "node.js": 1,
+        "rest api": 1,
+        "dom": 1
     }
 
+    technology_score = 0
     for keyword, points in tech_points.items():
         if keyword in title:
-            score += points * 2
+            technology_score += points * 2
         elif keyword in description:
-            score += points
+            technology_score += points
+    score += min(technology_score, 8)
 
-    # C. Experience level signals
-    junior_keywords = ["junior", "entry level", "graduate", "trainee", "intern"]
     for keyword in junior_keywords:
         if keyword in title:
-            score += 5
+            score += 4
+            break
         elif keyword in description:
-            score += 2
+            score += 1
+            break
 
-    for keyword in senior_keywords:
-        if keyword in title:
-            score -= 12
-        elif keyword in description:
-            score -= 3
-
-    # D. Role relevance negatives
-    negative_role_keywords = [
-        "backend developer",
-        "devops",
-        "data scientist",
-        "machine learning engineer",
-        "mobile developer",
-        "ios developer",
-        "android developer"
-    ]
-
-    for keyword in negative_role_keywords:
-        if keyword in title:
-            score -= 10
-        elif keyword in description:
-            score -= 4
-
-    # E. Strong title signal for "web developer" or "frontend" without exact job title
-    if "frontend" in title:
-        score += 3
-    elif "frontend" in description:
-        score += 1
-
-    if "front-end" in title:
-        score += 3
-    elif "front-end" in description:
-        score += 1
-
-    # F. Avoid giving too much weight to a single description mention
-    if "react" in description and "react developer" not in title:
-        score += 1
+    if "full stack" in title or "full-stack" in title:
+        score = min(score, 13)
 
     return score
 
@@ -465,169 +537,124 @@ def is_location_ok(location):
     return True
 
 
-if "--test-email" in sys.argv:
-    test_job = {
-        "title": "TEST EMAIL — sample Junior React Developer role",
-        "company": "Remote Job Finder test",
-        "location": "Remote",
-        "score": 18,
-        "match_category": "Excellent Match",
-        "url": "https://example.com/test-job"
-    }
+def process_jobs(all_jobs, saved_jobs, minimum_save_score=6):
 
-    if not send_email_notification(
-        [test_job],
-        subject="Remote Job Finder — TEST EMAIL"
-    ):
-        raise SystemExit(1)
+    saved_urls = {str(job.get("url") or "") for job in saved_jobs}
 
-    raise SystemExit(0)
+    for job in saved_jobs:
+        job["score"] = calculate_score(job)
+        job["match_category"] = get_match_category(job["score"])
 
+    matched_jobs = []
+    frontend_matches = 0
 
-# Get jobs from APIs
+    for job in all_jobs:
+        title = str(job.get("title") or "").lower()
+        is_frontend = is_relevant_frontend_job(job)
+        is_senior = any(keyword in title for keyword in senior_keywords)
+        is_location_allowed = is_location_ok(job.get("location"))
 
-remotive_jobs = get_remotive_jobs()
+        if is_frontend and not is_senior and is_location_allowed:
+            frontend_matches += 1
+            job["score"] = calculate_score(job)
+            job["match_category"] = get_match_category(job["score"])
 
-arbeitnow_jobs = get_arbeitnow_jobs()
+            job_url = str(job.get("url") or "")
+            if job_url and job_url not in saved_urls:
+                matched_jobs.append(job)
+                saved_urls.add(job_url)
 
-all_jobs = remotive_jobs + arbeitnow_jobs
+    all_saved_jobs = saved_jobs + matched_jobs
 
+    for job in all_saved_jobs:
+        job["match_category"] = get_match_category(job.get("score", 0))
 
-print("Remotive jobs:", len(remotive_jobs))
-print("Arbeitnow jobs:", len(arbeitnow_jobs))
-print("Total jobs collected:", len(all_jobs))
-
-
-# Load saved jobs
-
-if os.path.exists("jobs.json"):
-
-    with open("jobs.json", "r", encoding="utf-8") as file:
-        saved_jobs = json.load(file)
-
-else:
-
-    saved_jobs = []
-
-
-saved_urls = {str(job.get("url") or "") for job in saved_jobs}
-
-print("Saved jobs:", len(saved_jobs))
-
-
-# Calculate scores for existing jobs
-
-for job in saved_jobs:
-
-    job["score"] = calculate_score(job)
-    job["match_category"] = get_match_category(job["score"])
-
-
-matched_jobs = []
-
-frontend_matches = 0
-
-
-# Process new jobs
-
-for job in all_jobs:
-
-    title = str(job.get("title") or "").lower()
-
-    is_frontend = is_relevant_frontend_job(job)
-
-    is_senior = any(
-        keyword in title
-        for keyword in senior_keywords
+    saveable_jobs = [
+        job for job in all_saved_jobs
+        if job.get("score", 0) >= minimum_save_score
+        or job.get("status") in {"saved", "applied"}
+    ]
+    saveable_jobs.sort(
+        key=lambda job: job.get("score", 0),
+        reverse=True
     )
 
-    is_location_allowed = is_location_ok(job.get("location"))
-
-    if is_frontend and not is_senior and is_location_allowed:
-
-        frontend_matches += 1
-
-        score = calculate_score(job)
-
-        job["score"] = score
-        job["match_category"] = get_match_category(score)
-
-        if job["url"] not in saved_urls:
-
-            matched_jobs.append(job)
-
-            print()
-            print("NEW JOB")
-            print("TITLE:", job["title"])
-            print("COMPANY:", job["company"])
-            print("LOCATION:", job["location"])
-            print("SOURCE:", job["source"])
-            print("SCORE:", job["score"])
-            print("APPLY:", job["url"])
+    return matched_jobs, frontend_matches, saveable_jobs
 
 
-print("Frontend matches:", frontend_matches)
-print("New jobs:", len(matched_jobs))
+def get_notification_jobs(matched_jobs, minimum_save_score):
+
+    return [
+        job for job in matched_jobs
+        if job.get("score", 0) >= minimum_save_score
+    ]
 
 
+def run_job_finder(show_notification=True):
 
-all_saved_jobs = saved_jobs + matched_jobs
+    remotive_jobs = get_remotive_jobs()
+    arbeitnow_jobs = get_arbeitnow_jobs()
+    all_jobs = remotive_jobs + arbeitnow_jobs
 
-for job in all_saved_jobs:
-    job["match_category"] = get_match_category(job.get("score", 0))
+    print("Remotive jobs:", len(remotive_jobs))
+    print("Arbeitnow jobs:", len(arbeitnow_jobs))
+    print("Total jobs collected:", len(all_jobs))
 
-# Keep only jobs that are relevant enough to save
-minimum_save_score = 6
-saveable_jobs = [
-    job for job in all_saved_jobs
-    if job.get("score", 0) >= minimum_save_score
-]
+    if os.path.exists("jobs.json"):
+        with open("jobs.json", "r", encoding="utf-8") as file:
+            saved_jobs = json.load(file)
+    else:
+        saved_jobs = []
 
-# Rank jobs by score
+    print("Saved jobs:", len(saved_jobs))
 
-saveable_jobs.sort(
-    key=lambda job: job.get("score", 0),
-    reverse=True
-)
+    minimum_save_score = 6
+    matched_jobs, frontend_matches, saveable_jobs = process_jobs(
+        all_jobs,
+        saved_jobs,
+        minimum_save_score
+    )
 
-
-print()
-print("===== JOB RANKING =====")
-
-for index, job in enumerate(saveable_jobs, start=1):
+    print("Frontend matches:", frontend_matches)
+    print("New jobs:", len(matched_jobs))
 
     print()
-    print(f"#{index}")
-    print("TITLE:", job.get("title", "Unknown"))
-    print("COMPANY:", job.get("company", "Unknown"))
-    print("LOCATION:", job.get("location", "Unknown"))
-    print("SCORE:", job.get("score", 0))
-    print("MATCH:", job.get("match_category", "Unknown"))
-    print("SOURCE:", job.get("source", "Unknown"))
-    print("APPLY:", job.get("url", "Unknown"))
+    print("===== JOB RANKING =====")
 
-# Save only the best matching jobs
+    for index, job in enumerate(saveable_jobs, start=1):
+        print()
+        print(f"#{index}")
+        print("TITLE:", job.get("title", "Unknown"))
+        print("COMPANY:", job.get("company", "Unknown"))
+        print("LOCATION:", job.get("location", "Unknown"))
+        print("SCORE:", job.get("score", 0))
+        print("MATCH:", job.get("match_category", "Unknown"))
+        print("SOURCE:", job.get("source", "Unknown"))
+        print("APPLY:", job.get("url", "Unknown"))
 
-with open("jobs.json", "w", encoding="utf-8") as file:
+    with open("jobs.json", "w", encoding="utf-8") as file:
+        json.dump(
+            saveable_jobs,
+            file,
+            indent=4,
+            ensure_ascii=False
+        )
 
-    json.dump(
-        saveable_jobs,
-        file,
-        indent=4,
-        ensure_ascii=False
+    new_notification_jobs = get_notification_jobs(
+        matched_jobs,
+        minimum_save_score
     )
 
+    if new_notification_jobs:
+        if show_notification:
+            show_new_job_notification(new_notification_jobs)
+    else:
+        print("No new jobs to notify.")
 
-new_email_jobs = [
-    job for job in matched_jobs
-    if job.get("score", 0) >= minimum_save_score
-]
-
-if new_email_jobs:
-    send_email_notification(new_email_jobs)
-else:
-    print("No new jobs to email.")
+    print("Total saved jobs:", len(saveable_jobs))
+    print("Jobs saved to jobs.json")
+    return new_notification_jobs
 
 
-print("Total saved jobs:", len(saveable_jobs))
-print("Jobs saved to jobs.json")
+if __name__ == "__main__":
+    run_job_finder()

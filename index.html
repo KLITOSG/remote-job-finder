@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#101827">
+    <title>Remote Job Finder</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            font-family: Inter, "Segoe UI", sans-serif;
+            background: #101827;
+            color: #f3f6fc;
+            font-synthesis: none;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-width: 320px;
+            background:
+                radial-gradient(ellipse at 15% 0%, #1c3151 0, transparent 38rem),
+                #101827;
+        }
+
+        button, input, select { font: inherit; }
+
+        .shell {
+            width: min(1100px, calc(100% - 36px));
+            margin: 0 auto;
+            padding: 42px 0 64px;
+        }
+
+        .topline {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #8fa4c5;
+            font-size: .8rem;
+            font-weight: 700;
+            letter-spacing: .14em;
+            text-transform: uppercase;
+        }
+
+        .pulse {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: #65e0ae;
+            box-shadow: 0 0 16px #65e0ae88;
+        }
+
+        h1 {
+            margin: 15px 0 8px;
+            font-size: clamp(2.2rem, 6vw, 4rem);
+            letter-spacing: -.055em;
+            line-height: 1;
+        }
+
+        .intro {
+            margin: 0;
+            color: #a7b5ca;
+            font-size: 1.05rem;
+        }
+
+        .toolbar {
+            display: grid;
+            grid-template-columns: minmax(200px, 1fr) 220px;
+            gap: 12px;
+            margin: 30px 0 16px;
+        }
+
+        .control {
+            min-height: 48px;
+            padding: 0 15px;
+            border: 1px solid #34435a;
+            border-radius: 12px;
+            outline: none;
+            background: #172337;
+            color: #f3f6fc;
+        }
+
+        .control:focus { border-color: #8d78ff; }
+        input::placeholder { color: #8391a8; }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 0 0 24px;
+        }
+
+        .lists {
+            display: flex;
+            gap: 8px;
+            margin: 0 0 20px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid #29384e;
+        }
+
+        .chip {
+            padding: 8px 13px;
+            border: 1px solid #34435a;
+            border-radius: 999px;
+            background: #172337;
+            color: #bac7d9;
+            cursor: pointer;
+        }
+
+        .chip:hover, .chip[aria-pressed="true"] {
+            border-color: #8d78ff;
+            background: #302a56;
+            color: #fff;
+        }
+
+        .summary {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin: 0 0 12px;
+            color: #9eacc1;
+            font-size: .92rem;
+        }
+
+        .cards {
+            display: grid;
+            gap: 13px;
+        }
+
+        .card {
+            padding: 21px;
+            border: 1px solid #29384e;
+            border-radius: 17px;
+            background: linear-gradient(135deg, #1a273a, #151f30);
+            box-shadow: 0 10px 30px #00000014;
+        }
+
+        .card-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 18px;
+        }
+
+        .card h2 {
+            margin: 0;
+            font-size: clamp(1.1rem, 3vw, 1.4rem);
+            letter-spacing: -.025em;
+        }
+
+        .company {
+            margin: 7px 0 0;
+            color: #a9b7cb;
+        }
+
+        .match {
+            flex: 0 0 auto;
+            padding: 7px 10px;
+            border: 1px solid #3d6b5e;
+            border-radius: 999px;
+            background: #18352e;
+            color: #8aebc1;
+            font-size: .8rem;
+            font-weight: 700;
+        }
+
+        .details {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 17px 0 20px;
+        }
+
+        .detail {
+            padding: 6px 9px;
+            border-radius: 8px;
+            background: #222f43;
+            color: #c1ccdc;
+            font-size: .84rem;
+        }
+
+        .description-preview {
+            margin: 0;
+            color: #a9b7cb;
+            line-height: 1.6;
+        }
+
+        .skills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+            margin-top: 13px;
+        }
+
+        .skill {
+            padding: 5px 9px;
+            border: 1px solid #344866;
+            border-radius: 999px;
+            background: #1b2c43;
+            color: #b9cafa;
+            font-size: .78rem;
+            font-weight: 650;
+        }
+
+        .description-details {
+            margin-top: 14px;
+            color: #b6c3d6;
+            font-size: .9rem;
+            line-height: 1.65;
+        }
+
+        .description-details summary {
+            width: fit-content;
+            color: #b6aaff;
+            cursor: pointer;
+            font-weight: 650;
+        }
+
+        .full-description { white-space: pre-wrap; }
+
+        .card-bottom {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .source { color: #8292aa; font-size: .86rem; }
+
+        .apply {
+            display: inline-flex;
+            min-height: 40px;
+            align-items: center;
+            justify-content: center;
+            padding: 0 15px;
+            border-radius: 10px;
+            background: #8d78ff;
+            color: #fff;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .apply:hover { background: #a192ff; }
+
+        .job-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .status-action {
+            min-height: 40px;
+            padding: 0 13px;
+            border: 1px solid #495a75;
+            border-radius: 10px;
+            background: #202d42;
+            color: #dce5f2;
+            font-weight: 650;
+            cursor: pointer;
+        }
+
+        .status-action:hover { border-color: #8d78ff; }
+        .status-action:disabled { cursor: wait; opacity: .6; }
+
+        .action-message {
+            min-height: 1.25rem;
+            margin: -12px 0 12px;
+            color: #8aebc1;
+            font-size: .9rem;
+        }
+        .action-message.error { color: #ffb6bc; }
+
+        .monitoring {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            margin: 24px 0;
+            padding: 15px 17px;
+            border: 1px solid #34435a;
+            border-radius: 14px;
+            background: #172337;
+        }
+
+        .monitoring-copy { color: #aebbd0; line-height: 1.5; }
+        .monitoring-copy strong { color: #f3f6fc; }
+
+        .notification-toggle {
+            flex: 0 0 auto;
+            min-height: 40px;
+            padding: 0 14px;
+            border: 1px solid #7664dc;
+            border-radius: 10px;
+            background: #302a56;
+            color: #fff;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .notification-toggle:hover { background: #403773; }
+
+        .new-jobs-alert {
+            margin: 0 0 18px;
+            padding: 14px 16px;
+            border: 1px solid #3d6b5e;
+            border-radius: 12px;
+            background: #18352e;
+            color: #a8f4d2;
+        }
+
+        .state {
+            padding: 34px 20px;
+            border: 1px dashed #40516c;
+            border-radius: 15px;
+            color: #b8c5d8;
+            text-align: center;
+        }
+
+        .state.error { border-color: #a7505a; color: #ffb6bc; }
+
+        @media (max-width: 650px) {
+            .shell { width: min(100% - 24px, 1100px); padding-top: 30px; }
+            .toolbar { grid-template-columns: 1fr; }
+            .card { padding: 17px; }
+            .card-top { flex-direction: column-reverse; gap: 11px; }
+            .summary { align-items: flex-start; flex-direction: column; }
+            .monitoring { align-items: flex-start; flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <main class="shell">
+        <div class="topline"><span class="pulse"></span> Personal job dashboard</div>
+        <h1>Remote Job Finder</h1>
+        <p class="intro">Relevant opportunities, ranked for your frontend profile.</p>
+
+        <section class="monitoring" aria-label="Job monitoring and notifications">
+            <div class="monitoring-copy">
+                <strong id="monitoring-status">Starting job monitor...</strong>
+                <div id="notification-status">PC notifications are off until you enable them.</div>
+            </div>
+            <button class="notification-toggle" id="notification-toggle" type="button">
+                Enable PC notifications
+            </button>
+        </section>
+        <div class="new-jobs-alert" id="new-jobs-alert" role="status" hidden></div>
+
+        <nav class="lists" aria-label="Job lists">
+            <button class="chip" type="button" data-status="all" aria-pressed="true">All jobs</button>
+            <button class="chip" type="button" data-status="saved" aria-pressed="false">Saved</button>
+            <button class="chip" type="button" data-status="applied" aria-pressed="false">Applied</button>
+        </nav>
+
+        <section class="toolbar" aria-label="Job search and filters">
+            <input class="control" id="search" type="search"
+                   placeholder="Search title, company, location or skills..."
+                   aria-label="Search jobs">
+            <select class="control" id="match-filter" aria-label="Filter by match quality">
+                <option value="">All match levels</option>
+                <option>Excellent Match</option>
+                <option>Strong Match</option>
+                <option>Good Match</option>
+                <option>Weak Match</option>
+                <option>Poor Match</option>
+            </select>
+        </section>
+
+        <div class="chips" aria-label="Quick filters">
+            <button class="chip" type="button" data-filter="junior" aria-pressed="false">Junior</button>
+            <button class="chip" type="button" data-filter="react" aria-pressed="false">React</button>
+            <button class="chip" type="button" data-filter="javascript" aria-pressed="false">JavaScript</button>
+            <button class="chip" type="button" data-filter="remote" aria-pressed="false">Remote</button>
+            <button class="chip" type="button" data-filter="europe" aria-pressed="false">Europe</button>
+        </div>
+
+        <div class="summary">
+            <span id="job-count">Loading jobs...</span>
+            <span>Sorted by match score</span>
+        </div>
+        <p class="action-message" id="action-message" aria-live="polite"></p>
+        <section class="cards" id="job-list" aria-live="polite"></section>
+    </main>
+
+    <script>
+        const jobList = document.querySelector("#job-list");
+        const searchInput = document.querySelector("#search");
+        const matchFilter = document.querySelector("#match-filter");
+        const jobCount = document.querySelector("#job-count");
+        const actionMessage = document.querySelector("#action-message");
+        const monitoringStatus = document.querySelector("#monitoring-status");
+        const notificationStatus = document.querySelector("#notification-status");
+        const notificationToggle = document.querySelector("#notification-toggle");
+        const newJobsAlert = document.querySelector("#new-jobs-alert");
+        const quickFilters = new Set();
+        let activeStatus = "all";
+        let jobs = [];
+        let notificationCursor = BigInt(sessionStorage.getItem("lastNotificationId") || "0");
+
+        function addText(parent, tagName, className, text) {
+            const element = document.createElement(tagName);
+            element.className = className;
+            element.textContent = text;
+            parent.append(element);
+            return element;
+        }
+
+        function showState(message, isError = false) {
+            jobList.replaceChildren();
+            const state = addText(jobList, "div", "state", message);
+            if (isError) state.classList.add("error");
+        }
+
+        function updateNotificationControls() {
+            if (!("Notification" in window)) {
+                notificationStatus.textContent = "This browser does not support PC notifications.";
+                notificationToggle.hidden = true;
+            } else if (Notification.permission === "granted") {
+                notificationStatus.textContent = "PC notifications are enabled.";
+                notificationToggle.textContent = "Notifications enabled";
+                notificationToggle.disabled = true;
+            } else if (Notification.permission === "denied") {
+                notificationStatus.textContent = "Notifications are blocked. Allow them for this site in your browser settings.";
+                notificationToggle.textContent = "Notifications blocked";
+                notificationToggle.disabled = true;
+            } else {
+                notificationStatus.textContent = "PC notifications are off until you enable them.";
+            }
+        }
+
+        async function enableNotifications() {
+            if (!("Notification" in window)) {
+                updateNotificationControls();
+                return;
+            }
+
+            const permission = await Notification.requestPermission();
+            updateNotificationControls();
+            if (permission === "granted") {
+                notificationStatus.textContent = "Enabled. New matching jobs can now show PC notifications.";
+            }
+        }
+
+        function announceNewJobs(event) {
+            const foundJobs = event.jobs || [];
+            if (!foundJobs.length) return;
+
+            const jobNames = foundJobs.slice(0, 3).map((job) => job.title || "New job");
+            const remainingCount = foundJobs.length - jobNames.length;
+            const extra = remainingCount > 0 ? `, and ${remainingCount} more` : "";
+            newJobsAlert.textContent =
+                `${foundJobs.length} new matching job${foundJobs.length === 1 ? "" : "s"}: ${jobNames.join(", ")}${extra}`;
+            newJobsAlert.hidden = false;
+
+            if ("Notification" in window && Notification.permission === "granted") {
+                const desktopNotification = new Notification(
+                    `${foundJobs.length} new Remote Job Finder match${foundJobs.length === 1 ? "" : "es"}`,
+                    { body: `${jobNames.join(", ")}${extra}` }
+                );
+                desktopNotification.onclick = () => {
+                    window.focus();
+                    desktopNotification.close();
+                };
+            }
+        }
+
+        function getSearchableText(job) {
+            return [
+                job.title, job.company, job.location, job.description,
+                job.source, job.match_category
+            ].join(" ").toLowerCase();
+        }
+
+        function matchesFilters(job) {
+            const searchable = getSearchableText(job);
+            const status = job.status || "new";
+            const query = searchInput.value.trim().toLowerCase();
+            if (activeStatus !== "all" && status !== activeStatus) return false;
+            if (query && !searchable.includes(query)) return false;
+            if (matchFilter.value && job.match_category !== matchFilter.value) return false;
+
+            for (const filter of quickFilters) {
+                if (!searchable.includes(filter)) return false;
+            }
+            return true;
+        }
+
+        async function changeJobStatus(job, status, button) {
+            button.disabled = true;
+            actionMessage.textContent = "";
+            actionMessage.classList.remove("error");
+
+            try {
+                const response = await fetch("/api/job-status", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ url: job.url, status })
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || `Could not update job (${response.status}).`);
+                }
+
+                job.status = result.status;
+                actionMessage.textContent = status === "saved"
+                    ? "Job saved to your interested list."
+                    : status === "applied"
+                        ? "Job moved to your applied list."
+                        : "Job removed from your lists.";
+                renderJobs();
+            } catch (error) {
+                actionMessage.textContent = error.message;
+                actionMessage.classList.add("error");
+                button.disabled = false;
+            }
+        }
+
+        async function refreshJobs() {
+            const response = await fetch("/api/jobs", { cache: "no-store" });
+            if (!response.ok) throw new Error(`Could not load jobs (${response.status}).`);
+            const data = await response.json();
+            if (!Array.isArray(data)) throw new Error("The jobs API did not return a list.");
+            jobs = data.sort((first, second) => (second.score || 0) - (first.score || 0));
+            renderJobs();
+        }
+
+        async function refreshMonitorStatus() {
+            const response = await fetch("/api/status", { cache: "no-store" });
+            if (!response.ok) throw new Error(`Could not load monitor status (${response.status}).`);
+            const status = await response.json();
+            const minutes = Math.round(status.interval_seconds / 60);
+
+            if (status.checking) {
+                monitoringStatus.textContent = `Checking job sites now · repeats every ${minutes} minutes while the server runs`;
+            } else if (status.last_error) {
+                monitoringStatus.textContent = `Last check failed: ${status.last_error} · retry scheduled`;
+            } else if (!status.last_check) {
+                monitoringStatus.textContent = `Job check starts shortly · repeats every ${minutes} minutes`;
+            } else {
+                const lastChecked = new Date(status.last_check * 1000).toLocaleTimeString();
+                monitoringStatus.textContent = `Monitoring every ${minutes} minutes · last check ${lastChecked}`;
+            }
+        }
+
+        async function refreshNotifications() {
+            const response = await fetch(
+                `/api/notifications?after=${notificationCursor}`,
+                { cache: "no-store" }
+            );
+            if (!response.ok) throw new Error(`Could not check new-job notifications (${response.status}).`);
+            const events = await response.json();
+            for (const event of events) {
+                announceNewJobs(event);
+                const eventId = BigInt(event.id);
+                if (eventId > notificationCursor) notificationCursor = eventId;
+            }
+            if (events.length) {
+                sessionStorage.setItem("lastNotificationId", String(notificationCursor));
+                await refreshJobs();
+            }
+        }
+
+        function renderJobs() {
+            const visibleJobs = jobs.filter(matchesFilters);
+            jobCount.textContent = `${visibleJobs.length} of ${jobs.length} jobs`;
+            jobList.replaceChildren();
+
+            if (visibleJobs.length === 0) {
+                showState(jobs.length ? "No jobs match these filters." : "No saved jobs yet. Run python main.py to collect jobs.");
+                return;
+            }
+
+            for (const job of visibleJobs) {
+                const card = document.createElement("article");
+                card.className = "card";
+                const top = document.createElement("div");
+                top.className = "card-top";
+                const heading = document.createElement("div");
+                addText(heading, "h2", "", job.title || "Untitled job");
+                addText(heading, "p", "company", job.company || "Company not listed");
+                top.append(heading);
+                addText(top, "span", "match", `${job.score ?? 0} · ${job.match_category || "Unrated"}`);
+                card.append(top);
+
+                const details = document.createElement("div");
+                details.className = "details";
+                addText(details, "span", "detail", job.location || "Location not specified");
+                addText(details, "span", "detail", job.match_category || "Unrated");
+                card.append(details);
+
+                if (job.description_preview) {
+                    addText(card, "p", "description-preview", job.description_preview);
+                }
+
+                if (job.skills && job.skills.length > 0) {
+                    const skills = document.createElement("div");
+                    skills.className = "skills";
+                    skills.setAttribute("aria-label", "Detected skills");
+                    for (const skill of job.skills) {
+                        addText(skills, "span", "skill", skill);
+                    }
+                    card.append(skills);
+                }
+
+                if (job.description_text) {
+                    const descriptionDetails = document.createElement("details");
+                    descriptionDetails.className = "description-details";
+                    addText(descriptionDetails, "summary", "", "Read full description");
+                    addText(descriptionDetails, "p", "full-description", job.description_text);
+                    card.append(descriptionDetails);
+                }
+
+                const bottom = document.createElement("div");
+                bottom.className = "card-bottom";
+                addText(bottom, "span", "source", job.source || "Job source");
+                const actions = document.createElement("div");
+                actions.className = "job-actions";
+                const apply = addText(actions, "a", "apply", "View job");
+                if (job.url && /^https?:\/\//i.test(job.url)) {
+                    apply.href = job.url;
+                    apply.target = "_blank";
+                    apply.rel = "noopener noreferrer";
+                } else {
+                    apply.removeAttribute("href");
+                    apply.setAttribute("aria-disabled", "true");
+                }
+
+                const status = job.status || "new";
+                let actionLabel;
+                let nextStatus;
+
+                if (status === "new") {
+                    actionLabel = "Save job";
+                    nextStatus = "saved";
+                } else if (status === "saved") {
+                    actionLabel = "Mark as applied";
+                    nextStatus = "applied";
+                } else {
+                    actionLabel = "Move to Saved";
+                    nextStatus = "saved";
+                }
+
+                const statusButton = addText(actions, "button", "status-action", actionLabel);
+                statusButton.type = "button";
+                statusButton.addEventListener("click", () => {
+                    changeJobStatus(job, nextStatus, statusButton);
+                });
+
+                if (status === "applied") {
+                    const removeButton = addText(actions, "button", "status-action", "Remove from lists");
+                    removeButton.type = "button";
+                    removeButton.addEventListener("click", () => {
+                        changeJobStatus(job, "new", removeButton);
+                    });
+                }
+
+                bottom.append(actions);
+                card.append(bottom);
+                jobList.append(card);
+            }
+        }
+
+        searchInput.addEventListener("input", renderJobs);
+        matchFilter.addEventListener("change", renderJobs);
+
+        document.querySelectorAll("[data-filter]").forEach((button) => {
+            button.addEventListener("click", () => {
+                const filter = button.dataset.filter;
+                if (quickFilters.has(filter)) {
+                    quickFilters.delete(filter);
+                    button.setAttribute("aria-pressed", "false");
+                } else {
+                    quickFilters.add(filter);
+                    button.setAttribute("aria-pressed", "true");
+                }
+                renderJobs();
+            });
+        });
+
+        document.querySelectorAll("[data-status]").forEach((button) => {
+            button.addEventListener("click", () => {
+                activeStatus = button.dataset.status;
+                document.querySelectorAll("[data-status]").forEach((tab) => {
+                    tab.setAttribute("aria-pressed", String(tab === button));
+                });
+                renderJobs();
+            });
+        });
+
+        notificationToggle.addEventListener("click", enableNotifications);
+        updateNotificationControls();
+        refreshJobs().catch((error) => {
+            jobCount.textContent = "Jobs unavailable";
+            showState(`${error.message} Make sure the web server is running and jobs.json is valid.`, true);
+        });
+        refreshMonitorStatus().catch((error) => {
+            monitoringStatus.textContent = error.message;
+        });
+        refreshNotifications().catch((error) => {
+            actionMessage.textContent = error.message;
+            actionMessage.classList.add("error");
+        });
+        window.setInterval(() => {
+            refreshJobs().catch((error) => {
+                actionMessage.textContent = error.message;
+                actionMessage.classList.add("error");
+            });
+            refreshMonitorStatus().catch((error) => {
+                monitoringStatus.textContent = error.message;
+            });
+        }, 60_000);
+        window.setInterval(() => {
+            refreshNotifications().catch((error) => {
+                actionMessage.textContent = error.message;
+                actionMessage.classList.add("error");
+            });
+        }, 10_000);
+    </script>
+</body>
+</html>
