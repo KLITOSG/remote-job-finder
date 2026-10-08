@@ -333,7 +333,7 @@ class JobFinderRequestHandler(BaseHTTPRequestHandler):
             LOGGER.exception("Could not deliver a support report.")
             self.send_json_error(
                 503,
-                "Your report could not be emailed right now. Please email gaitanosklitos@gmail.com directly.",
+                "Your report could not be emailed right now. Please email remotejobfinderco@gmail.com directly.",
             )
             return
 

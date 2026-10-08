@@ -196,7 +196,7 @@ class WebUiTests(unittest.TestCase):
             headers
         )
         self.assertIn(b"Remote Job Finder", body)
-        self.assertIn(b"gaitanosklitos@gmail.com", body)
+        self.assertIn(b"remotejobfinderco@gmail.com", body)
         self.assertIn(b"support-form", body)
 
     def test_health_and_service_worker_are_served(self):

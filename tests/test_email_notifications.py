@@ -83,7 +83,7 @@ class EmailNotificationTests(unittest.TestCase):
                 {
                     "RESEND_API_KEY": "test-secret",
                     "EMAIL_FROM": "jobs@example.com",
-                    "SUPPORT_EMAIL": "gaitanosklitos@gmail.com",
+                    "SUPPORT_EMAIL": "remotejobfinderco@gmail.com",
                 },
                 clear=True,
             ),
@@ -97,7 +97,7 @@ class EmailNotificationTests(unittest.TestCase):
 
         payload = post.call_args.kwargs["json"]
         self.assertTrue(result)
-        self.assertEqual(payload["to"], ["gaitanosklitos@gmail.com"])
+        self.assertEqual(payload["to"], ["remotejobfinderco@gmail.com"])
         self.assertEqual(payload["reply_to"], "person@example.com")
         self.assertIn("Other", payload["subject"])
         self.assertIn("&lt;script&gt;", payload["html"])

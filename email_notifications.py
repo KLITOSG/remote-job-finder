@@ -8,7 +8,7 @@ import requests
 
 RESEND_API_URL = "https://api.resend.com/emails"
 REQUEST_TIMEOUT = 20
-DEFAULT_SUPPORT_EMAIL = "gaitanosklitos@gmail.com"
+DEFAULT_SUPPORT_EMAIL = "remotejobfinderco@gmail.com"
 SUPPORT_ISSUE_TYPES = {
     "loading_signin": "The app will not load or I cannot sign in",
     "jobs_missing": "Jobs are missing or not updating",

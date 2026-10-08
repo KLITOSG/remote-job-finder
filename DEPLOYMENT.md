@@ -105,7 +105,7 @@ alerts remain queued for a later retry and the worker logs the delivery failure.
 The app also shows a **Need help?** form before sign-in and in the dashboard.
 People can choose whether the problem is with loading/sign-in, missing or stale
 jobs, Saved/Applied jobs, notifications/email, or something else, then describe
-what happened. Reports are emailed to `gaitanosklitos@gmail.com` after Resend is
+what happened. Reports are emailed to `remotejobfinderco@gmail.com` after Resend is
 configured; a visitor can optionally leave an email address for a reply. The web
 service needs `RESEND_API_KEY` and `EMAIL_FROM` set in Render for this form to
 send. Until then, the form tells the visitor to email that address directly.

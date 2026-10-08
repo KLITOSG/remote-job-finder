@@ -20,4 +20,4 @@ services:
       - key: VAPID_PUBLIC_KEY
         sync: false
       - key: SUPPORT_EMAIL
-        value: gaitanosklitos@gmail.com
+        value: remotejobfinderco@gmail.com
