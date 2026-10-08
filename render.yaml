@@ -2,7 +2,7 @@ services:
   - type: web
     name: remote-job-finder
     runtime: python
-    plan: starter
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: python web_ui.py
     healthCheckPath: /health
@@ -19,36 +19,5 @@ services:
         sync: false
       - key: VAPID_PUBLIC_KEY
         sync: false
-      - key: RESEND_API_KEY
-        sync: false
-      - key: EMAIL_FROM
-        sync: false
       - key: SUPPORT_EMAIL
         value: gaitanosklitos@gmail.com
-  - type: worker
-    name: remote-job-finder-worker
-    runtime: python
-    plan: starter
-    buildCommand: pip install -r requirements.txt
-    startCommand: python cloud_worker.py
-    envVars:
-      - key: DEPLOYMENT_MODE
-        value: cloud
-      - key: JOB_CHECK_INTERVAL_MINUTES
-        value: "60"
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_ANON_KEY
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
-      - key: VAPID_PUBLIC_KEY
-        sync: false
-      - key: VAPID_PRIVATE_KEY
-        sync: false
-      - key: VAPID_CLAIMS_EMAIL
-        sync: false
-      - key: RESEND_API_KEY
-        sync: false
-      - key: EMAIL_FROM
-        sync: false

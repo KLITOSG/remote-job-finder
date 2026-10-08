@@ -18,6 +18,30 @@ class CloudWorkerTests(unittest.TestCase):
             "match_category": "Excellent Match",
         }
 
+    def test_run_once_validates_cloud_setup_and_performs_one_check(self):
+        with (
+            patch.object(cloud_worker.cloud_store, "get_cloud_config") as config,
+            patch.object(cloud_worker.cloud_store, "get_vapid_private_key") as private_key,
+            patch.object(cloud_worker.cloud_store, "get_vapid_claims_email") as claims_email,
+            patch.object(cloud_worker, "run_check", return_value=None) as run_check,
+        ):
+            result = cloud_worker.run_once()
+
+        self.assertEqual(result, 0)
+        config.assert_called_once_with()
+        private_key.assert_called_once_with()
+        claims_email.assert_called_once_with()
+        run_check.assert_called_once_with()
+
+    def test_run_once_returns_failure_when_job_check_fails(self):
+        with (
+            patch.object(cloud_worker.cloud_store, "get_cloud_config"),
+            patch.object(cloud_worker.cloud_store, "get_vapid_private_key"),
+            patch.object(cloud_worker.cloud_store, "get_vapid_claims_email"),
+            patch.object(cloud_worker, "run_check", return_value="source failed"),
+        ):
+            self.assertEqual(cloud_worker.run_once(), 1)
+
     def test_first_check_seeds_jobs_without_old_job_notifications(self):
         with (
             patch.object(cloud_worker, "get_interval_seconds", return_value=3600),
@@ -42,7 +66,7 @@ class CloudWorkerTests(unittest.TestCase):
             patch.object(cloud_worker, "send_pending_email_notifications"),
             patch.object(cloud_worker, "send_push_notifications") as send_push,
         ):
-            cloud_worker.run_check()
+            self.assertIsNone(cloud_worker.run_check())
 
         self.assertEqual(insert_jobs.call_args.args[0][0]["role_families"], ["frontend_web"])
         self.assertFalse(insert_jobs.call_args.kwargs["create_events"])
@@ -83,7 +107,7 @@ class CloudWorkerTests(unittest.TestCase):
             patch.object(cloud_worker, "send_pending_email_notifications"),
             patch.object(cloud_worker, "send_push_notifications") as send_push,
         ):
-            cloud_worker.run_check()
+            self.assertIsNone(cloud_worker.run_check())
 
         self.assertTrue(insert_jobs.call_args.kwargs["create_events"])
         self.assertFalse(queue_email.called)
@@ -109,7 +133,7 @@ class CloudWorkerTests(unittest.TestCase):
             ) as update_status,
             patch.object(cloud_worker, "send_pending_email_notifications"),
         ):
-            cloud_worker.run_check()
+            self.assertIn("source unavailable", cloud_worker.run_check())
 
         final_status = update_status.call_args.kwargs
         self.assertIn("source unavailable", final_status["last_error"])

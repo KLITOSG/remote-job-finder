@@ -1,9 +1,10 @@
 # Hosted deployment
 
-The hosted setup runs the dashboard as a Render web service and job collection as
-a separate Render background worker. The worker checks the existing job sources
-every 60 minutes without depending on a user's computer or browser being on. It
-collects from Remotive, Arbeitnow, Jobicy, and Remote OK.
+The free-tier setup runs the dashboard on Render, stores data in Supabase, and
+uses GitHub Actions to check the job sources hourly. The scheduled check does
+not depend on a user's computer or browser being on. GitHub's scheduler is
+best-effort (not an exact-time guarantee), and Render's free web service can
+sleep while idle.
 Each signed-in user can lock a personal job-family, experience-level, and work
 arrangement search. Saved and Applied statuses are private to each account.
 
@@ -24,8 +25,8 @@ arrangement search. Saved and Applied statuses are private to each account.
    initial testers while the consent screen is still in testing mode.
 
 The app uses Supabase Auth for Google sign-in and a service-role key only from
-the Python server/worker. The database tables have row-level security enabled
-and do not grant direct access to browser users.
+the Python server and GitHub Actions worker. The database tables have row-level
+security enabled and do not grant direct access to browser users.
 
 ## 2. Generate browser push keys
 
@@ -37,61 +38,55 @@ Install the Python requirements locally and generate one VAPID key pair:
 ```
 
 Keep the private key secret. Do not commit it, paste it into source files, or
-share it in chat. Use the printed public and private values only in the Render
-environment variables below.
+share it in chat. Use the printed public key in Render and both keys in the
+GitHub Actions secrets below.
 
-## 3. Create the Render services
+## 3. Configure hourly job checks in GitHub Actions
+
+The repository contains `.github/workflows/hourly-job-check.yml`. It runs the
+Python worker once an hour (scheduled for minute 17) and can also be started
+manually from GitHub's
+**Actions** tab. In the repository, open **Settings → Secrets and variables →
+Actions → New repository secret** and add:
+
+| Secret | Value |
+| --- | --- |
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_ANON_KEY` | Supabase anon/publishable key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service-role secret |
+| `VAPID_PUBLIC_KEY` | Public key generated in step 2 |
+| `VAPID_PRIVATE_KEY` | Private key generated in step 2 |
+| `VAPID_CLAIMS_EMAIL` | Your contact email, without `mailto:` |
+
+Never put secret values in workflow files, issues, or chat. Email is skipped for
+now; if you configure Resend later, add `RESEND_API_KEY` and `EMAIL_FROM` as
+repository secrets.
+
+## 4. Create the Render web service
 
 1. In Render, create a Blueprint from the GitHub repository containing this
    project and its `render.yaml`.
-2. Use the `starter` plan for both services so the web app and worker stay
-   running. The worker is a separate continuously running service; do not replace
-   it with a web-service in-process timer.
-3. Enter the prompted environment values for both services:
-
-   | Variable | Value |
-   | --- | --- |
-   | `SUPABASE_URL` | Supabase project URL |
-   | `SUPABASE_ANON_KEY` | Supabase publishable/anon key |
-   | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service-role secret; server-side only |
-   | `VAPID_PUBLIC_KEY` | Public key generated in step 2 |
-   | `RESEND_API_KEY` | Resend API key (web app sends support reports) |
-   | `EMAIL_FROM` | Verified Resend sender, e.g. `Remote Job Finder <alerts@yourdomain.com>` |
-
-   The web service also has `SUPPORT_EMAIL` prefilled as
-   `gaitanosklitos@gmail.com`; leave it as-is if support reports should go there.
-   Also set these worker-only variables:
-
-   | Variable | Value |
-   | --- | --- |
-   | `VAPID_PRIVATE_KEY` | Private key generated in step 2 |
-   | `VAPID_CLAIMS_EMAIL` | A contact email address, without `mailto:` |
-   | `RESEND_API_KEY` | The same Resend API key |
-   | `EMAIL_FROM` | The same verified Resend sender |
-
-   The Blueprint sets `DEPLOYMENT_MODE=cloud` and
-   `JOB_CHECK_INTERVAL_MINUTES=60`. Keep the service-role and VAPID private keys
-   in Render's secret environment settings; never add them to this repository or
-   to browser configuration.
-4. Wait for both services to deploy. Open the web service URL and sign in with
-   Google. The first worker check loads the current matches without sending a
-   burst of old-job notifications. Later newly discovered matches create
-   persistent in-app alerts and push notifications.
+2. Enter the prompted Supabase URL, anon key, service-role key, and VAPID public
+   key. The Blueprint configures the dashboard as a free web service.
+3. Wait for deployment. Open its URL and sign in with Google. Update Supabase
+   **Authentication → URL Configuration** with the Render URL and add it to the
+   allowed redirect URLs.
 
 Render assigns `PORT` to the web service. The app binds to that port and exposes
 `/health` for its health check.
 
-## 4. Enable notifications
+## 5. Enable notifications
 
 Each person signs in and chooses **Enable PC notifications** on every browser or
 device where they want alerts. This grants permission and registers that
 browser's push subscription. New matches can then arrive while the dashboard tab
 is closed, as long as that browser/device supports Web Push and its OS allows
-notifications. The cloud worker continues checking jobs even when the user has
-no browser open and their personal computer is off.
+notifications. GitHub Actions checks for new jobs even when the user has no
+browser open and their personal computer is off.
 
 Push notifications are opt-in. Users can still see new matches in the dashboard
-the next time they sign in.
+the next time they sign in. The free Render web service may take a short while
+to wake after inactivity.
 
 ## Personal searches and email alerts
 
@@ -100,8 +95,8 @@ arrangements, then save and lock the search. The worker uses those preferences
 to match newly collected listings; jobs with unclear level or arrangement remain
 eligible and are labeled Unspecified. Unlock the search before changing it.
 
-To enable email alerts, verify a sending domain in Resend, create an API key, and
-set `RESEND_API_KEY` and `EMAIL_FROM` on the background worker in Render. The
+To enable email alerts later, verify a sending domain in Resend, create an API
+key, and set `RESEND_API_KEY` and `EMAIL_FROM` as GitHub repository secrets. The
 sender address/domain must be verified by Resend. Each user can opt in to grouped
 email alerts in their saved search; alerts go to the email address supplied by
 their signed-in Google account. If Resend is not configured or rejects delivery,
@@ -110,10 +105,10 @@ alerts remain queued for a later retry and the worker logs the delivery failure.
 The app also shows a **Need help?** form before sign-in and in the dashboard.
 People can choose whether the problem is with loading/sign-in, missing or stale
 jobs, Saved/Applied jobs, notifications/email, or something else, then describe
-what happened. Reports are emailed to `gaitanosklitos@gmail.com`; a visitor can
-optionally leave an email address for a reply. The web service needs the same
-`RESEND_API_KEY` and `EMAIL_FROM` settings for this form to send. If Resend is
-unavailable, the form tells the visitor to email that address directly.
+what happened. Reports are emailed to `gaitanosklitos@gmail.com` after Resend is
+configured; a visitor can optionally leave an email address for a reply. The web
+service needs `RESEND_API_KEY` and `EMAIL_FROM` set in Render for this form to
+send. Until then, the form tells the visitor to email that address directly.
 
 ## Import existing personal lists
 
@@ -136,14 +131,17 @@ statuses.
 - Himalayas was not added: its API guide describes job-board use, but its general
   terms also restrict public display and mirroring. Get written permission before
   using that feed in this public app.
-- `render.yaml` uses paid always-on service plans; the host and Supabase account
-  may incur charges. Check the providers' current pricing and set billing alerts
-  before creating the services.
+- This is a free-tier compromise, not a 24/7 uptime guarantee. GitHub Actions
+  schedules can be delayed, and free hosted services can sleep, pause, or change
+  their limits. Check current provider pricing and terms before launch.
 - Cloud collection gathers supported remote and hybrid job families once per
   interval, then applies each locked user's preferences for dashboard results
   and notifications.
-- The app depends on Render, Supabase, its upstream job APIs, and the browser
-  push provider. It is independent of a user's PC, but no hosted service can
-  promise zero provider outages.
+- GitHub may disable scheduled workflows after long repository inactivity.
+  Check the **Actions** tab periodically and use **Run workflow** to start a
+  check manually if needed.
+- The app depends on Render, GitHub Actions, Supabase, upstream job APIs, and
+  the browser push provider. It is independent of a user's PC, but no hosted
+  service can promise zero provider outages.
 - Existing `jobs.json` is not used as the hosted database. Import it after
   signing in if you want to retain personal Saved/Applied entries.

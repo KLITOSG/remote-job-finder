@@ -1,8 +1,9 @@
-import json
 import hashlib
+import json
 import logging
 import os
 import signal
+import sys
 import threading
 import time
 
@@ -199,6 +200,7 @@ def run_check():
             last_error=error,
             checking=False,
         )
+    return error
 
 
 def stop_worker(signum, _frame):
@@ -221,5 +223,16 @@ def run_worker():
         STOP_EVENT.wait(interval_seconds)
 
 
+def run_once():
+    cloud_store.get_cloud_config()
+    cloud_store.get_vapid_private_key()
+    cloud_store.get_vapid_claims_email()
+    return 1 if run_check() else 0
+
+
 if __name__ == "__main__":
+    if sys.argv[1:] == ["--once"]:
+        sys.exit(run_once())
+    if sys.argv[1:]:
+        raise SystemExit("Usage: python cloud_worker.py [--once]")
     run_worker()
