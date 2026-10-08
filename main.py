@@ -6,6 +6,7 @@ import socket
 import ssl
 import smtplib
 import re
+import logging
 from html import unescape
 from html.parser import HTMLParser
 from email.mime.text import MIMEText
@@ -16,23 +17,37 @@ except AttributeError:
     pass
 
 
+LOGGER = logging.getLogger(__name__)
+JOBICY_API_URL = "https://jobicy.com/api/v2/remote-jobs"
+REMOTEOK_API_URL = "https://remoteok.com/api"
+SOURCE_REQUEST_TIMEOUT = 20
+
+
+class JobSourceError(RuntimeError):
+    pass
+
+
+def get_json_api_response(url, *, params=None, headers=None):
+    response = requests.get(
+        url,
+        params=params,
+        headers=headers,
+        timeout=SOURCE_REQUEST_TIMEOUT,
+    )
+    response.raise_for_status()
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise JobSourceError(f"Job source returned invalid JSON: {url}") from exc
+
+
 def get_remotive_jobs():
 
     url = "https://remotive.com/api/remote-jobs"
 
-    response = requests.get(url, timeout=20)
-
-    print("Remotive status:", response.status_code)
-
-    if response.status_code != 200:
-        print("Remotive request failed.")
-        return []
-
-    try:
-        data = response.json()
-    except ValueError:
-        print("Remotive response is not valid JSON.")
-        return []
+    data = get_json_api_response(url)
+    if not isinstance(data, dict) or not isinstance(data.get("jobs"), list):
+        raise JobSourceError("Remotive returned an unexpected response format.")
 
     jobs = []
 
@@ -44,6 +59,7 @@ def get_remotive_jobs():
             "location": job.get("candidate_required_location") or "",
             "description": job.get("description") or "",
             "url": job.get("url") or "",
+            "work_arrangement": "remote",
             "source": "Remotive"
         }
 
@@ -56,19 +72,9 @@ def get_arbeitnow_jobs():
 
     url = "https://www.arbeitnow.com/api/job-board-api"
 
-    response = requests.get(url, timeout=20)
-
-    print("Arbeitnow status:", response.status_code)
-
-    if response.status_code != 200:
-        print("Arbeitnow request failed.")
-        return []
-
-    try:
-        data = response.json()
-    except ValueError:
-        print("Arbeitnow response is not valid JSON.")
-        return []
+    data = get_json_api_response(url)
+    if not isinstance(data, dict) or not isinstance(data.get("data"), list):
+        raise JobSourceError("Arbeitnow returned an unexpected response format.")
 
     jobs = []
 
@@ -80,12 +86,99 @@ def get_arbeitnow_jobs():
             "location": job.get("location") or "",
             "description": job.get("description") or "",
             "url": job.get("url") or "",
+            "work_arrangement": "remote" if job.get("remote") else "",
             "source": "Arbeitnow"
         }
 
         jobs.append(job_data)
 
     return jobs
+
+
+def get_jobicy_jobs():
+    data = get_json_api_response(
+        JOBICY_API_URL,
+        params={"count": 200},
+        headers={"Accept": "application/json"},
+    )
+    if not isinstance(data, dict) or not isinstance(data.get("jobs"), list):
+        raise JobSourceError("Jobicy returned an unexpected response format.")
+
+    jobs = []
+    for job in data["jobs"]:
+        if not isinstance(job, dict):
+            continue
+        url = job.get("url") or ""
+        if not url.startswith(("https://", "http://")):
+            continue
+        jobs.append({
+            "title": job.get("jobTitle") or "",
+            "company": job.get("companyName") or "",
+            "location": job.get("jobGeo") or "Remote",
+            "description": job.get("jobDescription") or job.get("jobExcerpt") or "",
+            "url": url,
+            "work_arrangement": "remote",
+            "source": "Jobicy",
+        })
+    return jobs
+
+
+def get_remoteok_jobs():
+    data = get_json_api_response(
+        REMOTEOK_API_URL,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "RemoteJobFinder/1.0 (public remote-job listings)",
+        },
+    )
+    if not isinstance(data, list):
+        raise JobSourceError("Remote OK returned an unexpected response format.")
+
+    jobs = []
+    for job in data:
+        if not isinstance(job, dict) or not job.get("id"):
+            continue
+        url = job.get("url") or job.get("apply_url") or ""
+        if not url.startswith(("https://", "http://")):
+            continue
+        jobs.append({
+            "title": job.get("position") or "",
+            "company": job.get("company") or "",
+            "location": job.get("location") or "Remote",
+            "description": job.get("description") or "",
+            "url": url,
+            "work_arrangement": "remote",
+            "source": "Remote OK",
+        })
+    return jobs
+
+
+def collect_jobs_from_sources():
+    sources = (
+        ("Remotive", get_remotive_jobs),
+        ("Arbeitnow", get_arbeitnow_jobs),
+        ("Jobicy", get_jobicy_jobs),
+        ("Remote OK", get_remoteok_jobs),
+    )
+    collected_jobs = []
+    failures = []
+    successful_sources = 0
+    for source_name, get_jobs in sources:
+        try:
+            source_jobs = get_jobs()
+        except (requests.RequestException, JobSourceError, OSError, ValueError) as exc:
+            failures.append(f"{source_name}: {type(exc).__name__}: {exc}")
+            LOGGER.warning("Could not collect jobs from %s: %s", source_name, exc)
+            continue
+        successful_sources += 1
+        collected_jobs.extend(source_jobs)
+        LOGGER.info("Collected %s jobs from %s.", len(source_jobs), source_name)
+
+    if not successful_sources:
+        raise JobSourceError(
+            "All job sources failed. " + " | ".join(failures)
+        )
+    return collected_jobs
 
 
 senior_keywords = [
@@ -180,6 +273,279 @@ def is_remote_work_arrangement(job):
         re.search(pattern, work_details)
         for pattern in non_remote_patterns
     )
+
+
+ROLE_FAMILIES = {
+    "frontend_web": "Frontend and web development",
+    "software_it": "Software and IT",
+    "digital_marketing": "Digital marketing",
+    "social_media": "Social media and community",
+    "graphic_design": "Graphic design and creative",
+    "writing_content": "Writing and content",
+    "customer_support": "Customer support and success",
+    "sales_business": "Sales and business development",
+    "product_project": "Product and project management",
+    "data_analytics": "Data and analytics",
+    "hr_recruiting": "HR and recruiting",
+    "operations_admin": "Operations and administration",
+    "finance_accounting": "Finance and accounting",
+    "education_training": "Education and training",
+    "other": "Other professional roles",
+}
+
+
+ROLE_TITLE_PATTERNS = {
+    "frontend_web": (
+        r"\bfront[- ]?end\b",
+        r"\bweb (?:developer|designer|engineer)\b",
+        r"\breact developer\b",
+        r"\bui/?ux (?:developer|designer|engineer)\b",
+    ),
+    "software_it": (
+        r"\bsoftware\b",
+        r"\bfull[- ]stack\b",
+        r"\bback[- ]end\b",
+        r"\bdevops\b",
+        r"\bcloud engineer\b",
+        r"\b(?:qa|quality assurance|test) engineer\b",
+        r"\bcyber ?security\b",
+        r"\bit support\b",
+        r"\bsystems? administrator\b",
+        r"\bnetwork engineer\b",
+    ),
+    "digital_marketing": (
+        r"\bmarketing\b",
+        r"\bseo\b",
+        r"\bsem\b",
+        r"\bgrowth (?:specialist|manager|marketer)\b",
+        r"\bperformance marketing\b",
+        r"\bpaid (?:search|media|ads)\b",
+        r"\bemail marketer\b",
+        r"\bppc\b",
+    ),
+    "social_media": (
+        r"\bsocial media\b",
+        r"\bcommunity manager\b",
+        r"\binfluencer\b",
+        r"\bcontent creator\b",
+    ),
+    "graphic_design": (
+        r"\bgraphic designer\b",
+        r"\bvisual designer\b",
+        r"\bbrand designer\b",
+        r"\billustrator\b",
+        r"\bmotion designer\b",
+        r"\bart director\b",
+    ),
+    "writing_content": (
+        r"\bcopywriter\b",
+        r"\bcontent writer\b",
+        r"\btechnical writer\b",
+        r"\b(?:content|copy) editor\b",
+        r"\bwriter\b",
+    ),
+    "customer_support": (
+        r"\bcustomer support\b",
+        r"\bcustomer service\b",
+        r"\bcustomer success\b",
+        r"\bhelp ?desk\b",
+        r"\b(?:client|customer) care\b",
+    ),
+    "sales_business": (
+        r"\bsales\b",
+        r"\bbusiness development\b",
+        r"\baccount executive\b",
+        r"\b(?:sdr|bdr)\b",
+    ),
+    "product_project": (
+        r"\bproduct manager\b",
+        r"\bproduct owner\b",
+        r"\bproject manager\b",
+        r"\bprogram manager\b",
+        r"\bproject coordinator\b",
+        r"\bscrum master\b",
+    ),
+    "data_analytics": (
+        r"\bdata (?:analyst|scientist|engineer)\b",
+        r"\b(?:business intelligence|bi) analyst\b",
+        r"\banalytics?\b",
+        r"\bresearch analyst\b",
+    ),
+    "hr_recruiting": (
+        r"\brecruit(?:er|ing)\b",
+        r"\btalent acquisition\b",
+        r"\bhuman resources\b",
+        r"\bhr (?:specialist|manager|coordinator)\b",
+    ),
+    "operations_admin": (
+        r"\boperations?\b",
+        r"\bvirtual assistant\b",
+        r"\badministrative assistant\b",
+        r"\boffice manager\b",
+        r"\b(?:office )?coordinator\b",
+    ),
+    "finance_accounting": (
+        r"\baccountant\b",
+        r"\bbookkeeper\b",
+        r"\bfinance\b",
+        r"\bfinancial analyst\b",
+        r"\bpayroll\b",
+        r"\bauditor\b",
+    ),
+    "education_training": (
+        r"\bteacher\b",
+        r"\btutor\b",
+        r"\binstructional designer\b",
+        r"\b(?:learning|training) (?:specialist|manager|designer)\b",
+        r"\beducator\b",
+    ),
+}
+
+
+def classify_role_families(job):
+    title = str(job.get("title") or "").lower()
+    matches = [
+        family
+        for family, patterns in ROLE_TITLE_PATTERNS.items()
+        if any(re.search(pattern, title) for pattern in patterns)
+    ]
+    return matches or (["other"] if title.strip() else [])
+
+
+def classify_experience_level(job):
+    title = str(job.get("title") or "").lower()
+    description = get_description_text(job.get("description")).lower()
+    if re.search(r"\b(?:senior|sr\.?|lead|principal|staff|director|head of|vp)\b", title):
+        return "senior"
+    if re.search(r"\b(?:entry[- ]level|junior|jr\.?|graduate|trainee|intern)\b", title):
+        return "entry"
+    if re.search(r"\b(?:mid[- ]level|mid level|intermediate)\b", title):
+        return "mid"
+    if re.search(
+        r"\b(?:this is a |seeking a |looking for a )?"
+        r"(?:senior|sr\.?|lead|principal|staff|director|head of)\b"
+        r"(?:[- ]level)?(?:\s+\w+){0,3}\s+(?:role|position|job)\b"
+        r"|\b(?:senior|sr\.?|lead|principal|staff)[- ]level\b",
+        description
+    ):
+        return "senior"
+    if re.search(
+        r"\b(?:entry[- ]level|junior|graduate|trainee|intern)\b"
+        r"(?:\s+\w+){0,3}\s+(?:role|position|job)\b"
+        r"|\b(?:entry[- ]level|junior)[- ]level\b",
+        description
+    ):
+        return "entry"
+    if re.search(r"\b(?:mid[- ]level|intermediate)\s+(?:role|position|job)\b", description):
+        return "mid"
+
+    experience_years = [
+        (int(first), int(second))
+        for first, second in re.findall(
+            r"\b(\d{1,2})\s*(?:-|to)\s*(\d{1,2})\s+years?(?:\s+of\s+experience)?",
+            description
+        )
+    ]
+    if experience_years:
+        lowest = min(first for first, _ in experience_years)
+        highest = max(second for _, second in experience_years)
+        if lowest >= 6:
+            return "senior"
+        if highest <= 2:
+            return "entry"
+        return "mid"
+    if re.search(r"\b(?:6|7|8|9|10)\+?\s+years?(?:\s+of\s+experience)?\b", description):
+        return "senior"
+    if re.search(r"\b(?:0|1|2)\+?\s+years?(?:\s+of\s+experience)?\b", description):
+        return "entry"
+    if re.search(r"\b(?:3|4|5)\+?\s+years?(?:\s+of\s+experience)?\b", description):
+        return "mid"
+    return "unspecified"
+
+
+def classify_work_arrangement(job):
+    supplied_arrangement = str(job.get("work_arrangement") or "").strip().lower()
+    title = str(job.get("title") or "").lower()
+    description = get_description_text(job.get("description")).lower()
+    work_details = f"{title} {description}"
+    if re.search(r"\bhybrid\b|\b\d+\s+days?\s+(?:per|a)\s+week\s+in (?:the )?office\b", work_details):
+        return "hybrid"
+    if re.search(
+        r"\bon[- ]?site\b|\bin[- ]office\b|\boffice[- ]based\b"
+        r"|\bfully in (?:the )?office\b|\bremote work\s+not\s+(?:available|offered|possible)\b",
+        work_details
+    ):
+        return "onsite"
+    if supplied_arrangement in {"remote", "hybrid", "onsite"}:
+        return supplied_arrangement
+    if str(job.get("source") or "").lower() == "remotive":
+        return "remote"
+    if re.search(r"\bremote\b|\bwork from anywhere\b|\bwork from home\b", work_details):
+        return "remote"
+    return "unspecified"
+
+
+def normalize_job_profile(job):
+    normalized = dict(job)
+    normalized["role_families"] = classify_role_families(job)
+    normalized["experience_level"] = classify_experience_level(job)
+    normalized["work_arrangement"] = classify_work_arrangement(job)
+    return normalized
+
+
+def score_job_for_profile(job, preferences):
+    job = normalize_job_profile(job)
+    selected_families = set(preferences.get("role_families") or [])
+    selected_levels = set(preferences.get("experience_levels") or [])
+    selected_arrangements = set(preferences.get("work_arrangements") or [])
+
+    if not selected_families or not selected_levels or not selected_arrangements:
+        return None
+    if not selected_families.intersection(job["role_families"]):
+        return None
+    if (
+        job["experience_level"] != "unspecified"
+        and job["experience_level"] not in selected_levels
+    ):
+        return None
+    if (
+        job["work_arrangement"] != "unspecified"
+        and job["work_arrangement"] not in selected_arrangements
+    ):
+        return None
+
+    score = 10
+    if job["experience_level"] in selected_levels:
+        score += 4
+    if job["work_arrangement"] in selected_arrangements:
+        score += 2
+    description = get_description_text(job.get("description")).lower()
+    profile_terms = {
+        "frontend_web": ("react", "javascript", "typescript", "html", "css", "figma"),
+        "software_it": ("python", "javascript", "cloud", "devops", "sql", "security"),
+        "digital_marketing": ("seo", "sem", "analytics", "campaign", "advertising", "content"),
+        "social_media": ("instagram", "tiktok", "linkedin", "community", "content calendar"),
+        "graphic_design": ("adobe", "illustrator", "photoshop", "figma", "indesign", "branding"),
+        "writing_content": ("writing", "editing", "copywriting", "research", "content"),
+        "customer_support": ("customer", "support", "ticket", "crm", "client"),
+        "sales_business": ("sales", "pipeline", "crm", "prospecting", "revenue"),
+        "product_project": ("roadmap", "stakeholder", "agile", "project", "product"),
+        "data_analytics": ("sql", "python", "analytics", "dashboard", "reporting"),
+        "hr_recruiting": ("recruiting", "talent", "hiring", "human resources", "hr"),
+        "operations_admin": ("operations", "administration", "scheduling", "process", "coordination"),
+        "finance_accounting": ("accounting", "finance", "bookkeeping", "payroll", "budget"),
+        "education_training": ("teaching", "training", "curriculum", "learning", "education"),
+        "other": (),
+    }
+    relevant_terms = {
+        term
+        for family in selected_families.intersection(job["role_families"])
+        for term in profile_terms.get(family, ())
+    }
+    score += min(sum(term in description for term in relevant_terms), 8)
+    job["score"] = score
+    job["match_category"] = get_match_category(score)
+    return job
 
 
 def is_relevant_frontend_job(job):
@@ -590,22 +956,10 @@ def get_notification_jobs(matched_jobs, minimum_save_score):
     ]
 
 
-def run_job_finder(show_notification=True):
+def collect_and_process_jobs(saved_jobs):
+    all_jobs = collect_jobs_from_sources()
 
-    remotive_jobs = get_remotive_jobs()
-    arbeitnow_jobs = get_arbeitnow_jobs()
-    all_jobs = remotive_jobs + arbeitnow_jobs
-
-    print("Remotive jobs:", len(remotive_jobs))
-    print("Arbeitnow jobs:", len(arbeitnow_jobs))
     print("Total jobs collected:", len(all_jobs))
-
-    if os.path.exists("jobs.json"):
-        with open("jobs.json", "r", encoding="utf-8") as file:
-            saved_jobs = json.load(file)
-    else:
-        saved_jobs = []
-
     print("Saved jobs:", len(saved_jobs))
 
     minimum_save_score = 6
@@ -617,6 +971,22 @@ def run_job_finder(show_notification=True):
 
     print("Frontend matches:", frontend_matches)
     print("New jobs:", len(matched_jobs))
+    return matched_jobs, saveable_jobs
+
+
+def collect_job_listings():
+    return collect_jobs_from_sources()
+
+
+def run_job_finder(show_notification=True):
+
+    if os.path.exists("jobs.json"):
+        with open("jobs.json", "r", encoding="utf-8") as file:
+            saved_jobs = json.load(file)
+    else:
+        saved_jobs = []
+
+    matched_jobs, saveable_jobs = collect_and_process_jobs(saved_jobs)
 
     print()
     print("===== JOB RANKING =====")
@@ -642,7 +1012,7 @@ def run_job_finder(show_notification=True):
 
     new_notification_jobs = get_notification_jobs(
         matched_jobs,
-        minimum_save_score
+        6
     )
 
     if new_notification_jobs:

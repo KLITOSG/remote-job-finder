@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#101827">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
     <title>Remote Job Finder</title>
     <style>
         :root {
@@ -31,6 +33,100 @@
             margin: 0 auto;
             padding: 42px 0 64px;
         }
+
+        .auth-panel {
+            width: min(480px, 100%);
+            margin: 12vh auto 0;
+            padding: 28px;
+            border: 1px solid #34435a;
+            border-radius: 18px;
+            background: #172337;
+        }
+
+        .auth-panel h1 { font-size: 2.4rem; }
+        .auth-panel p { color: #a7b5ca; line-height: 1.55; }
+
+        .account-bar {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+            color: #a7b5ca;
+        }
+
+        .account-button {
+            min-height: 38px;
+            padding: 0 12px;
+            border: 1px solid #495a75;
+            border-radius: 9px;
+            background: #202d42;
+            color: #dce5f2;
+            cursor: pointer;
+        }
+
+        .account-button:hover { border-color: #8d78ff; }
+        .account-button:disabled { cursor: wait; opacity: .6; }
+
+        .auth-error { color: #ffb6bc !important; }
+        [hidden] { display: none !important; }
+
+        .preferences {
+            margin: 20px 0 28px;
+            padding: 20px;
+            border: 1px solid #34435a;
+            border-radius: 15px;
+            background: #172337;
+        }
+
+        .preferences h2 { margin: 0 0 8px; }
+        .preferences p { color: #a7b5ca; line-height: 1.5; }
+
+        .preference-groups {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 14px;
+        }
+
+        .preference-group {
+            margin: 0;
+            padding: 14px;
+            border: 1px solid #34435a;
+            border-radius: 11px;
+        }
+
+        .preference-group legend {
+            padding: 0 6px;
+            color: #f3f6fc;
+            font-weight: 700;
+        }
+
+        .preference-option {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin: 9px 0;
+            color: #c5d0df;
+            font-size: .9rem;
+        }
+
+        .preference-option input {
+            width: 16px;
+            height: 16px;
+            margin: 1px 0 0;
+            accent-color: #8d78ff;
+        }
+
+        .preference-actions {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .profile-lock-status { color: #a7b5ca; font-size: .9rem; }
 
         .topline {
             display: flex;
@@ -309,6 +405,52 @@
             color: #a8f4d2;
         }
 
+        .support-panel {
+            margin-top: 32px;
+            padding: 20px;
+            border: 1px solid #34435a;
+            border-radius: 15px;
+            background: #172337;
+        }
+
+        .support-panel h2 { margin: 0 0 8px; }
+        .support-panel p { color: #a7b5ca; line-height: 1.5; }
+
+        .support-form {
+            display: grid;
+            gap: 12px;
+            max-width: 680px;
+        }
+
+        .support-form label { color: #c5d0df; font-size: .92rem; }
+
+        .support-form select,
+        .support-form input,
+        .support-form textarea {
+            display: block;
+            width: 100%;
+            margin-top: 6px;
+        }
+
+        .support-form textarea {
+            min-height: 110px;
+            padding-top: 12px;
+            resize: vertical;
+        }
+
+        .support-form [aria-invalid="true"] { border-color: #ff7e8a; }
+        .support-status { min-height: 1.25rem; margin: 0; }
+        .support-status.error { color: #ffb6bc; }
+        .support-status.success { color: #8aebc1; }
+
+        .support-honeypot {
+            position: absolute;
+            left: -10000px;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+        }
+
         .state {
             padding: 34px 20px;
             border: 1px dashed #40516c;
@@ -331,9 +473,71 @@
 </head>
 <body>
     <main class="shell">
+        <section class="auth-panel" id="sign-in-panel">
+            <div class="topline"><span class="pulse"></span> Cloud-hosted job monitoring</div>
+            <h1>Remote Job Finder</h1>
+            <p>Sign in with Google to see matching roles and keep your Saved and Applied lists private to your account.</p>
+            <button class="notification-toggle" id="google-sign-in" type="button">
+                Continue with Google
+            </button>
+            <p class="auth-error" id="auth-error" aria-live="polite"></p>
+        </section>
+        <section class="account-bar" id="account-bar" hidden>
+            <span id="account-email"></span>
+            <button class="account-button" id="import-jobs" type="button">Import Saved/Applied jobs</button>
+            <input id="import-file" type="file" accept="application/json,.json" hidden>
+            <button class="account-button" id="sign-out" type="button">Sign out</button>
+        </section>
+        <div id="app-content" hidden>
         <div class="topline"><span class="pulse"></span> Personal job dashboard</div>
         <h1>Remote Job Finder</h1>
-        <p class="intro">Relevant opportunities, ranked for your frontend profile.</p>
+        <p class="intro">Remote and hybrid opportunities chosen for your saved search.</p>
+
+        <section class="preferences" id="preferences-panel" hidden aria-labelledby="preferences-title">
+            <h2 id="preferences-title">Your job search</h2>
+            <p>Select any job families, experience levels, and work arrangements. Listings with unclear level or arrangement stay eligible and are labelled Unspecified.</p>
+            <div class="preference-groups">
+                <fieldset class="preference-group" data-preference-group="role_families">
+                    <legend>Job families</legend>
+                    <label class="preference-option"><input type="checkbox" name="role_families" value="frontend_web"> Frontend and web development</label>
+                    <label class="preference-option"><input type="checkbox" name="role_families" value="software_it"> Software and IT</label>
+                    <label class="preference-option"><input type="checkbox" name="role_families" value="digital_marketing"> Digital marketing</label>
+                    <label class="preference-option"><input type="checkbox" name="role_families" value="social_media"> Social media and community</label>
+                    <label class="preference-option"><input type="checkbox" name="role_families" value="graphic_design"> Graphic design and creative</label>
+                    <label class="preference-option"><input type="checkbox" name="role_families" value="writing_content"> Writing and content</label>
+                    <label class="preference-option"><input type="checkbox" name="role_families" value="customer_support"> Customer support and success</label>
+                    <label class="preference-option"><input type="checkbox" name="role_families" value="sales_business"> Sales and business development</label>
+                    <label class="preference-option"><input type="checkbox" name="role_families" value="product_project"> Product and project management</label>
+                    <label class="preference-option"><input type="checkbox" name="role_families" value="data_analytics"> Data and analytics</label>
+                    <label class="preference-option"><input type="checkbox" name="role_families" value="hr_recruiting"> HR and recruiting</label>
+                    <label class="preference-option"><input type="checkbox" name="role_families" value="operations_admin"> Operations and administration</label>
+                    <label class="preference-option"><input type="checkbox" name="role_families" value="finance_accounting"> Finance and accounting</label>
+                    <label class="preference-option"><input type="checkbox" name="role_families" value="education_training"> Education and training</label>
+                    <label class="preference-option"><input type="checkbox" name="role_families" value="other"> Other professional roles</label>
+                </fieldset>
+                <fieldset class="preference-group" data-preference-group="experience_levels">
+                    <legend>Experience levels</legend>
+                    <label class="preference-option"><input type="checkbox" name="experience_levels" value="entry"> Entry level</label>
+                    <label class="preference-option"><input type="checkbox" name="experience_levels" value="mid"> Mid level</label>
+                    <label class="preference-option"><input type="checkbox" name="experience_levels" value="senior"> Senior level</label>
+                </fieldset>
+                <fieldset class="preference-group" data-preference-group="work_arrangements">
+                    <legend>Work arrangement</legend>
+                    <label class="preference-option"><input type="checkbox" name="work_arrangements" value="remote"> Remote</label>
+                    <label class="preference-option"><input type="checkbox" name="work_arrangements" value="hybrid"> Hybrid</label>
+                </fieldset>
+            </div>
+            <label class="preference-option">
+                <input id="email-alerts" type="checkbox">
+                Send me email alerts for new matching jobs
+            </label>
+            <p class="profile-lock-status" id="profile-lock-status" aria-live="polite"></p>
+            <p class="auth-error" id="preferences-error" aria-live="polite"></p>
+            <div class="preference-actions">
+                <button class="notification-toggle" id="save-preferences" type="button">Save and lock my search</button>
+                <button class="account-button" id="unlock-preferences" type="button" hidden>Unlock to edit</button>
+            </div>
+        </section>
 
         <section class="monitoring" aria-label="Job monitoring and notifications">
             <div class="monitoring-copy">
@@ -380,9 +584,95 @@
         </div>
         <p class="action-message" id="action-message" aria-live="polite"></p>
         <section class="cards" id="job-list" aria-live="polite"></section>
+        </div>
+        <section class="support-panel" aria-labelledby="support-title">
+            <h2 id="support-title">Need help?</h2>
+            <p>
+                Email <a href="mailto:gaitanosklitos@gmail.com">gaitanosklitos@gmail.com</a>
+                directly, or tell us what went wrong below. You can use this even if
+                you cannot sign in.
+            </p>
+            <form class="support-form" id="support-form">
+                <label for="support-issue">What kind of problem happened?</label>
+                <select class="control" id="support-issue" name="issue_type" required>
+                    <option value="">Choose a problem</option>
+                    <option value="loading_signin">The app will not load or I cannot sign in</option>
+                    <option value="jobs_missing">Jobs are missing or not updating</option>
+                    <option value="saved_applied">Saved or Applied jobs are not working</option>
+                    <option value="notifications">Notifications or email alerts are not working</option>
+                    <option value="other">Other</option>
+                </select>
+                <label for="support-details">Tell us what happened</label>
+                <textarea class="control" id="support-details" name="details"
+                          maxlength="2000" required
+                          placeholder="For example: what you clicked, what you expected, and what you saw instead."></textarea>
+                <label for="support-email">Your email, if you would like a reply (optional)</label>
+                <input class="control" id="support-email" name="contact_email"
+                       type="email" maxlength="254" autocomplete="email"
+                       placeholder="you@example.com">
+                <label class="support-honeypot" aria-hidden="true">
+                    Leave this field empty
+                    <input name="website" type="text" tabindex="-1" autocomplete="off">
+                </label>
+                <button class="notification-toggle" id="support-submit" type="submit">
+                    Send problem report
+                </button>
+                <p class="support-status" id="support-status" role="status" aria-live="polite"></p>
+            </form>
+        </section>
     </main>
 
     <script>
+        const supportForm = document.querySelector("#support-form");
+        const supportSubmit = document.querySelector("#support-submit");
+        const supportStatus = document.querySelector("#support-status");
+
+        supportForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            supportStatus.textContent = "";
+            supportStatus.className = "support-status";
+            supportSubmit.disabled = true;
+            const formData = new FormData(supportForm);
+            try {
+                const response = await fetch("/api/support-report", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        issue_type: formData.get("issue_type"),
+                        details: formData.get("details"),
+                        contact_email: formData.get("contact_email"),
+                        website: formData.get("website"),
+                    }),
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || "Your report could not be sent.");
+                }
+                supportForm.reset();
+                supportStatus.textContent = "Thank you. Your problem report was emailed to support.";
+                supportStatus.classList.add("success");
+            } catch (error) {
+                supportStatus.textContent = `${error.message} You can email gaitanosklitos@gmail.com directly.`;
+                supportStatus.classList.add("error");
+            } finally {
+                supportSubmit.disabled = false;
+            }
+        });
+    </script>
+
+    <script type="module">
+        const configResponse = await fetch("/api/config", { cache: "no-store" });
+        const appConfig = await configResponse.json();
+        if (!configResponse.ok) {
+            throw new Error(appConfig.error || "The app configuration could not be loaded.");
+        }
+        const cloudMode = appConfig.cloud === true;
+        let authClient = null;
+        if (cloudMode) {
+            const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+            authClient = createClient(appConfig.supabase_url, appConfig.supabase_anon_key);
+        }
+
         const jobList = document.querySelector("#job-list");
         const searchInput = document.querySelector("#search");
         const matchFilter = document.querySelector("#match-filter");
@@ -392,10 +682,39 @@
         const notificationStatus = document.querySelector("#notification-status");
         const notificationToggle = document.querySelector("#notification-toggle");
         const newJobsAlert = document.querySelector("#new-jobs-alert");
+        const signInPanel = document.querySelector("#sign-in-panel");
+        const accountBar = document.querySelector("#account-bar");
+        const appContent = document.querySelector("#app-content");
+        const accountEmail = document.querySelector("#account-email");
+        const authError = document.querySelector("#auth-error");
+        const signInButton = document.querySelector("#google-sign-in");
+        const signOutButton = document.querySelector("#sign-out");
+        const importButton = document.querySelector("#import-jobs");
+        const importFile = document.querySelector("#import-file");
+        const preferencesPanel = document.querySelector("#preferences-panel");
+        const preferencesError = document.querySelector("#preferences-error");
+        const profileLockStatus = document.querySelector("#profile-lock-status");
+        const savePreferencesButton = document.querySelector("#save-preferences");
+        const unlockPreferencesButton = document.querySelector("#unlock-preferences");
+        const emailAlerts = document.querySelector("#email-alerts");
         const quickFilters = new Set();
         let activeStatus = "all";
         let jobs = [];
-        let notificationCursor = BigInt(sessionStorage.getItem("lastNotificationId") || "0");
+        let savedProfile = null;
+        let notificationCursor = 0n;
+        let activeUserId = null;
+        let pollingStarted = false;
+        let pushSubscription = null;
+
+        async function apiFetch(path, options = {}) {
+            const headers = new Headers(options.headers || {});
+            if (cloudMode) {
+                const { data: { session } } = await authClient.auth.getSession();
+                if (!session) throw new Error("Please sign in to continue.");
+                headers.set("Authorization", `Bearer ${session.access_token}`);
+            }
+            return fetch(path, { ...options, headers });
+        }
 
         function addText(parent, tagName, className, text) {
             const element = document.createElement(tagName);
@@ -411,14 +730,116 @@
             if (isError) state.classList.add("error");
         }
 
+        function getCheckedValues(name) {
+            return Array.from(
+                preferencesPanel.querySelectorAll(`input[name="${name}"]:checked`)
+            ).map((input) => input.value);
+        }
+
+        function displayPreferences(profile) {
+            savedProfile = profile;
+            preferencesError.textContent = "";
+            preferencesError.classList.remove("auth-error");
+            const values = {
+                role_families: profile?.role_families || [],
+                experience_levels: profile?.experience_levels || [],
+                work_arrangements: profile?.work_arrangements || [],
+            };
+            for (const [name, selected] of Object.entries(values)) {
+                preferencesPanel.querySelectorAll(`input[name="${name}"]`).forEach((input) => {
+                    input.checked = selected.includes(input.value);
+                });
+            }
+            emailAlerts.checked = profile?.email_notifications === true;
+
+            const locked = profile?.profile_locked === true;
+            preferencesPanel.querySelectorAll("fieldset, #email-alerts").forEach((control) => {
+                control.disabled = locked;
+            });
+            savePreferencesButton.hidden = locked;
+            unlockPreferencesButton.hidden = !locked;
+            profileLockStatus.textContent = locked
+                ? `Search saved and locked · ${values.role_families.length} job family${values.role_families.length === 1 ? "" : "ies"} selected`
+                : "Your choices are saved to this Google account when you lock your search.";
+        }
+
+        async function savePreferences() {
+            preferencesError.textContent = "";
+            preferencesError.classList.remove("auth-error");
+            const preferences = {
+                role_families: getCheckedValues("role_families"),
+                experience_levels: getCheckedValues("experience_levels"),
+                work_arrangements: getCheckedValues("work_arrangements"),
+                email_notifications: emailAlerts.checked,
+            };
+            savePreferencesButton.disabled = true;
+            try {
+                const response = await apiFetch("/api/preferences", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(preferences),
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || "Could not save your search.");
+                displayPreferences({ ...preferences, profile_locked: result.locked });
+                actionMessage.textContent = "Your search is saved and locked to this account.";
+                actionMessage.classList.remove("error");
+                await refreshJobs();
+            } catch (error) {
+                preferencesError.textContent = error.message;
+                preferencesError.classList.add("auth-error");
+            } finally {
+                savePreferencesButton.disabled = false;
+            }
+        }
+
+        async function unlockPreferences() {
+            preferencesError.textContent = "";
+            unlockPreferencesButton.disabled = true;
+            try {
+                const response = await apiFetch("/api/preferences/unlock", { method: "POST" });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || "Could not unlock your search.");
+                displayPreferences({ ...savedProfile, profile_locked: result.locked });
+            } catch (error) {
+                preferencesError.textContent = error.message;
+                preferencesError.classList.add("auth-error");
+            } finally {
+                unlockPreferencesButton.disabled = false;
+            }
+        }
+
         function updateNotificationControls() {
+            if (cloudMode && !appConfig.vapid_public_key) {
+                notificationStatus.textContent = "Server push notifications are not configured.";
+                notificationToggle.disabled = true;
+                return;
+            }
+            if (
+                cloudMode
+                && (!("serviceWorker" in navigator) || !("PushManager" in window))
+            ) {
+                notificationStatus.textContent = "This browser does not support background push notifications.";
+                notificationToggle.disabled = true;
+                return;
+            }
             if (!("Notification" in window)) {
                 notificationStatus.textContent = "This browser does not support PC notifications.";
                 notificationToggle.hidden = true;
             } else if (Notification.permission === "granted") {
-                notificationStatus.textContent = "PC notifications are enabled.";
-                notificationToggle.textContent = "Notifications enabled";
-                notificationToggle.disabled = true;
+                if (cloudMode && pushSubscription) {
+                    notificationStatus.textContent = "Push notifications are enabled for this device.";
+                    notificationToggle.textContent = "Disable PC notifications";
+                    notificationToggle.disabled = false;
+                } else if (cloudMode) {
+                    notificationStatus.textContent = "Push permission is granted. Enable notifications on this device.";
+                    notificationToggle.textContent = "Enable PC notifications";
+                    notificationToggle.disabled = false;
+                } else {
+                    notificationStatus.textContent = "PC notifications are enabled.";
+                    notificationToggle.textContent = "Notifications enabled";
+                    notificationToggle.disabled = true;
+                }
             } else if (Notification.permission === "denied") {
                 notificationStatus.textContent = "Notifications are blocked. Allow them for this site in your browser settings.";
                 notificationToggle.textContent = "Notifications blocked";
@@ -429,6 +850,27 @@
         }
 
         async function enableNotifications() {
+            if (cloudMode && pushSubscription) {
+                try {
+                    const response = await apiFetch("/api/push-subscription", {
+                        method: "DELETE",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ endpoint: pushSubscription.endpoint })
+                    });
+                    const result = await response.json();
+                    if (!response.ok) {
+                        throw new Error(result.error || "Could not disable push notifications.");
+                    }
+                    await pushSubscription.unsubscribe();
+                    pushSubscription = null;
+                    updateNotificationControls();
+                } catch (error) {
+                    notificationStatus.textContent = error.message;
+                    notificationStatus.classList.add("auth-error");
+                }
+                return;
+            }
+
             if (!("Notification" in window)) {
                 updateNotificationControls();
                 return;
@@ -437,8 +879,31 @@
             const permission = await Notification.requestPermission();
             updateNotificationControls();
             if (permission === "granted") {
-                notificationStatus.textContent = "Enabled. New matching jobs can now show PC notifications.";
+                if (cloudMode) {
+                    try {
+                        const registration = await navigator.serviceWorker.ready;
+                        pushSubscription = await registration.pushManager.getSubscription()
+                            || await registration.pushManager.subscribe({
+                                userVisibleOnly: true,
+                                applicationServerKey: decodeBase64Url(appConfig.vapid_public_key)
+                            });
+                        await savePushSubscription(pushSubscription);
+                        updateNotificationControls();
+                    } catch (error) {
+                        notificationStatus.textContent = error.message;
+                        notificationStatus.classList.add("auth-error");
+                        notificationToggle.disabled = false;
+                    }
+                } else {
+                    notificationStatus.textContent = "Enabled. New matching jobs can now show PC notifications.";
+                }
             }
+        }
+
+        function decodeBase64Url(value) {
+            const padding = "=".repeat((4 - value.length % 4) % 4);
+            const decoded = atob((value + padding).replace(/-/g, "+").replace(/_/g, "/"));
+            return Uint8Array.from(decoded, (character) => character.charCodeAt(0));
         }
 
         function announceNewJobs(event) {
@@ -452,7 +917,7 @@
                 `${foundJobs.length} new matching job${foundJobs.length === 1 ? "" : "s"}: ${jobNames.join(", ")}${extra}`;
             newJobsAlert.hidden = false;
 
-            if ("Notification" in window && Notification.permission === "granted") {
+            if (!cloudMode && "Notification" in window && Notification.permission === "granted") {
                 const desktopNotification = new Notification(
                     `${foundJobs.length} new Remote Job Finder match${foundJobs.length === 1 ? "" : "es"}`,
                     { body: `${jobNames.join(", ")}${extra}` }
@@ -491,7 +956,7 @@
             actionMessage.classList.remove("error");
 
             try {
-                const response = await fetch("/api/job-status", {
+                const response = await apiFetch("/api/job-status", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ url: job.url, status })
@@ -516,7 +981,7 @@
         }
 
         async function refreshJobs() {
-            const response = await fetch("/api/jobs", { cache: "no-store" });
+            const response = await apiFetch("/api/jobs", { cache: "no-store" });
             if (!response.ok) throw new Error(`Could not load jobs (${response.status}).`);
             const data = await response.json();
             if (!Array.isArray(data)) throw new Error("The jobs API did not return a list.");
@@ -525,25 +990,31 @@
         }
 
         async function refreshMonitorStatus() {
-            const response = await fetch("/api/status", { cache: "no-store" });
+            const response = await apiFetch("/api/status", { cache: "no-store" });
             if (!response.ok) throw new Error(`Could not load monitor status (${response.status}).`);
             const status = await response.json();
             const minutes = Math.round(status.interval_seconds / 60);
 
             if (status.checking) {
-                monitoringStatus.textContent = `Checking job sites now · repeats every ${minutes} minutes while the server runs`;
+                monitoringStatus.textContent = cloudMode
+                    ? `Cloud worker checking job sites now · repeats every ${minutes} minutes`
+                    : `Checking job sites now · repeats every ${minutes} minutes while the server runs`;
             } else if (status.last_error) {
                 monitoringStatus.textContent = `Last check failed: ${status.last_error} · retry scheduled`;
             } else if (!status.last_check) {
-                monitoringStatus.textContent = `Job check starts shortly · repeats every ${minutes} minutes`;
+                monitoringStatus.textContent = cloudMode
+                    ? `Cloud worker starting its first check · repeats every ${minutes} minutes`
+                    : `Job check starts shortly · repeats every ${minutes} minutes`;
             } else {
                 const lastChecked = new Date(status.last_check * 1000).toLocaleTimeString();
-                monitoringStatus.textContent = `Monitoring every ${minutes} minutes · last check ${lastChecked}`;
+                monitoringStatus.textContent = cloudMode
+                    ? `Cloud monitoring every ${minutes} minutes · last check ${lastChecked}`
+                    : `Monitoring every ${minutes} minutes · last check ${lastChecked}`;
             }
         }
 
         async function refreshNotifications() {
-            const response = await fetch(
+            const response = await apiFetch(
                 `/api/notifications?after=${notificationCursor}`,
                 { cache: "no-store" }
             );
@@ -555,7 +1026,10 @@
                 if (eventId > notificationCursor) notificationCursor = eventId;
             }
             if (events.length) {
-                sessionStorage.setItem("lastNotificationId", String(notificationCursor));
+                const cursorKey = cloudMode
+                    ? `lastNotificationId:${activeUserId}`
+                    : "lastNotificationId";
+                sessionStorage.setItem(cursorKey, String(notificationCursor));
                 await refreshJobs();
             }
         }
@@ -566,7 +1040,13 @@
             jobList.replaceChildren();
 
             if (visibleJobs.length === 0) {
-                showState(jobs.length ? "No jobs match these filters." : "No saved jobs yet. Run python main.py to collect jobs.");
+                showState(jobs.length
+                    ? "No jobs match these filters."
+                    : cloudMode
+                        ? savedProfile?.profile_locked
+                            ? "No matching jobs have been collected yet. The cloud worker checks hourly."
+                            : "Choose your job families, experience levels, and work arrangements, then save and lock your search."
+                        : "No saved jobs yet. Run python main.py to collect jobs.");
                 return;
             }
 
@@ -687,34 +1167,211 @@
             });
         });
 
+        async function savePushSubscription(subscription) {
+            const response = await apiFetch("/api/push-subscription", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(subscription)
+            });
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.error || "Could not save the push subscription.");
+            }
+        }
+
+        async function initializePushForSession() {
+            updateNotificationControls();
+            if (
+                !cloudMode
+                || !("serviceWorker" in navigator)
+                || !("PushManager" in window)
+                || !("Notification" in window)
+            ) {
+                return;
+            }
+            try {
+                await navigator.serviceWorker.register("/service-worker.js");
+                if (Notification.permission !== "granted") return;
+                const registration = await navigator.serviceWorker.ready;
+                pushSubscription = await registration.pushManager.getSubscription();
+                if (pushSubscription) {
+                    await savePushSubscription(pushSubscription);
+                }
+                updateNotificationControls();
+            } catch (error) {
+                notificationStatus.textContent = error.message;
+                notificationStatus.classList.add("auth-error");
+            }
+        }
+
+        async function showSession(session) {
+            const userId = cloudMode ? session?.user?.id : "local";
+            if (userId === activeUserId) return;
+            activeUserId = userId || null;
+            jobs = [];
+
+            if (!activeUserId) {
+                signInPanel.hidden = false;
+                accountBar.hidden = true;
+                appContent.hidden = true;
+                return;
+            }
+
+            signInPanel.hidden = true;
+            accountBar.hidden = !cloudMode;
+            appContent.hidden = false;
+            preferencesPanel.hidden = !cloudMode;
+            accountEmail.textContent = session?.user?.email || "";
+            if (cloudMode) {
+                const response = await apiFetch("/api/preferences", { cache: "no-store" });
+                const profile = await response.json();
+                if (!response.ok) {
+                    throw new Error(profile.error || "Could not load your saved search.");
+                }
+                displayPreferences(profile);
+            }
+            const cursorKey = cloudMode
+                ? `lastNotificationId:${activeUserId}`
+                : "lastNotificationId";
+            notificationCursor = BigInt(sessionStorage.getItem(cursorKey) || "0");
+            if (cloudMode && notificationCursor === 0n) {
+                const response = await apiFetch("/api/notifications/latest", { cache: "no-store" });
+                if (!response.ok) throw new Error("Could not initialize the notification cursor.");
+                const latest = await response.json();
+                notificationCursor = BigInt(latest.latest_id || "0");
+                sessionStorage.setItem(cursorKey, String(notificationCursor));
+            }
+            await initializePushForSession();
+
+            try {
+                await refreshJobs();
+                await refreshMonitorStatus();
+                await refreshNotifications();
+            } catch (error) {
+                actionMessage.textContent = error.message;
+                actionMessage.classList.add("error");
+            }
+
+            if (!pollingStarted) {
+                pollingStarted = true;
+                window.setInterval(() => {
+                    if (!activeUserId) return;
+                    refreshJobs().catch((error) => {
+                        actionMessage.textContent = error.message;
+                        actionMessage.classList.add("error");
+                    });
+                    refreshMonitorStatus().catch((error) => {
+                        monitoringStatus.textContent = error.message;
+                    });
+                }, 60_000);
+                window.setInterval(() => {
+                    if (!activeUserId) return;
+                    refreshNotifications().catch((error) => {
+                        actionMessage.textContent = error.message;
+                        actionMessage.classList.add("error");
+                    });
+                }, 10_000);
+            }
+        }
+
+        if (cloudMode) {
+            savePreferencesButton.addEventListener("click", savePreferences);
+            unlockPreferencesButton.addEventListener("click", unlockPreferences);
+            signInButton.addEventListener("click", async () => {
+                authError.textContent = "";
+                signInButton.disabled = true;
+                const { error } = await authClient.auth.signInWithOAuth({
+                    provider: "google",
+                    options: { redirectTo: window.location.origin }
+                });
+                if (error) {
+                    authError.textContent = error.message;
+                    signInButton.disabled = false;
+                }
+            });
+
+            signOutButton.addEventListener("click", async () => {
+                if (pushSubscription) {
+                    try {
+                        const response = await apiFetch("/api/push-subscription", {
+                            method: "DELETE",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ endpoint: pushSubscription.endpoint })
+                        });
+                        const result = await response.json();
+                        if (!response.ok) {
+                            throw new Error(result.error || "Could not disable push notifications.");
+                        }
+                        await pushSubscription.unsubscribe();
+                        pushSubscription = null;
+                    } catch (error) {
+                        actionMessage.textContent = error.message;
+                        actionMessage.classList.add("error");
+                        return;
+                    }
+                }
+                const { error } = await authClient.auth.signOut();
+                if (error) {
+                    actionMessage.textContent = error.message;
+                    actionMessage.classList.add("error");
+                }
+            });
+
+            importButton.addEventListener("click", () => importFile.click());
+            importFile.addEventListener("change", async () => {
+                const file = importFile.files?.[0];
+                importFile.value = "";
+                if (!file) return;
+                if (file.size > 1_048_576) {
+                    actionMessage.textContent = "Please choose a jobs.json file smaller than 1 MB.";
+                    actionMessage.classList.add("error");
+                    return;
+                }
+
+                try {
+                    const importedJobs = JSON.parse(await file.text());
+                    if (!Array.isArray(importedJobs)) {
+                        throw new Error("The selected file must contain a JSON job list.");
+                    }
+                    const response = await apiFetch("/api/import-jobs", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(importedJobs)
+                    });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.error || "Could not import jobs.");
+                    actionMessage.textContent = `Imported ${result.imported} Saved/Applied job${result.imported === 1 ? "" : "s"}.`;
+                    actionMessage.classList.remove("error");
+                    await refreshJobs();
+                } catch (error) {
+                    actionMessage.textContent = error.message;
+                    actionMessage.classList.add("error");
+                }
+            });
+        }
+
         notificationToggle.addEventListener("click", enableNotifications);
-        updateNotificationControls();
-        refreshJobs().catch((error) => {
-            jobCount.textContent = "Jobs unavailable";
-            showState(`${error.message} Make sure the web server is running and jobs.json is valid.`, true);
-        });
-        refreshMonitorStatus().catch((error) => {
-            monitoringStatus.textContent = error.message;
-        });
-        refreshNotifications().catch((error) => {
-            actionMessage.textContent = error.message;
-            actionMessage.classList.add("error");
-        });
-        window.setInterval(() => {
-            refreshJobs().catch((error) => {
-                actionMessage.textContent = error.message;
-                actionMessage.classList.add("error");
+        if (cloudMode) {
+            authClient.auth.onAuthStateChange((_event, session) => {
+                window.setTimeout(() => {
+                    showSession(session).catch((error) => {
+                        authError.textContent = error.message;
+                    });
+                }, 0);
             });
-            refreshMonitorStatus().catch((error) => {
-                monitoringStatus.textContent = error.message;
+            authClient.auth.getSession().then(({ data, error }) => {
+                if (error) throw error;
+                return showSession(data.session);
+            }).catch((error) => {
+                authError.textContent = error.message;
+                signInPanel.hidden = false;
             });
-        }, 60_000);
-        window.setInterval(() => {
-            refreshNotifications().catch((error) => {
-                actionMessage.textContent = error.message;
-                actionMessage.classList.add("error");
+        } else {
+            showSession({ user: { id: "local", email: "" } }).catch((error) => {
+                jobCount.textContent = "Jobs unavailable";
+                showState(`${error.message} Make sure the web server is running and jobs.json is valid.`, true);
             });
-        }, 10_000);
+        }
     </script>
 </body>
 </html>

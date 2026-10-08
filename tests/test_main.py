@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 import main
 
@@ -92,6 +93,172 @@ class JobScoringTests(unittest.TestCase):
         self.assertEqual(main.get_match_category(10), "Good Match")
         self.assertEqual(main.get_match_category(6), "Weak Match")
         self.assertEqual(main.get_match_category(5), "Poor Match")
+
+    def test_classifies_requested_job_families(self):
+        jobs = {
+            "frontend_web": make_job("Frontend Developer"),
+            "software_it": make_job("Senior Software Engineer"),
+            "digital_marketing": make_job("Digital Marketing Specialist"),
+            "social_media": make_job("Social Media Manager"),
+            "graphic_design": make_job("Graphic Designer"),
+            "writing_content": make_job("Technical Writer"),
+            "customer_support": make_job("Customer Success Specialist"),
+            "sales_business": make_job("Business Development Representative"),
+            "product_project": make_job("Product Manager"),
+            "data_analytics": make_job("Data Analyst"),
+            "hr_recruiting": make_job("Talent Acquisition Specialist"),
+            "operations_admin": make_job("Operations Coordinator"),
+            "finance_accounting": make_job("Accountant"),
+            "education_training": make_job("Instructional Designer"),
+        }
+
+        for family, job in jobs.items():
+            with self.subTest(family=family):
+                self.assertIn(family, main.classify_role_families(job))
+
+    def test_social_media_manager_is_not_automatically_classified_as_senior(self):
+        self.assertEqual(
+            main.classify_experience_level(make_job("Social Media Manager")),
+            "unspecified"
+        )
+
+    def test_experience_level_uses_explicit_title_description_and_years(self):
+        self.assertEqual(
+            main.classify_experience_level(make_job("Senior Graphic Designer")),
+            "senior"
+        )
+        self.assertEqual(
+            main.classify_experience_level(make_job(
+                "Graphic Designer",
+                description="This is a senior design role."
+            )),
+            "senior"
+        )
+        self.assertEqual(
+            main.classify_experience_level(make_job(
+                "Digital Marketing Specialist",
+                description="Requires 1-2 years of experience."
+            )),
+            "entry"
+        )
+        self.assertEqual(
+            main.classify_experience_level(make_job(
+                "Digital Marketing Specialist",
+                description="Requires 3-5 years of experience."
+            )),
+            "mid"
+        )
+
+    def test_profile_matching_honors_role_level_and_work_arrangement(self):
+        preferences = {
+            "role_families": ["digital_marketing"],
+            "experience_levels": ["entry"],
+            "work_arrangements": ["remote"],
+        }
+        remote_entry_marketing_job = make_job(
+            "Entry-Level Digital Marketing Specialist",
+            description="We work fully remote. Requires 1-2 years of experience."
+        )
+        senior_marketing_job = make_job(
+            "Senior Digital Marketing Specialist",
+            url="https://example.com/senior",
+            description="Remote role."
+        )
+        hybrid_design_job = make_job(
+            "Graphic Designer",
+            url="https://example.com/design",
+            description="Hybrid role."
+        )
+        unclear_marketing_job = make_job(
+            "Digital Marketing Coordinator",
+            url="https://example.com/unclear"
+        )
+
+        matched = main.score_job_for_profile(remote_entry_marketing_job, preferences)
+        self.assertIsNotNone(matched)
+        self.assertEqual(matched["experience_level"], "entry")
+        self.assertEqual(matched["work_arrangement"], "remote")
+        self.assertIsNone(main.score_job_for_profile(senior_marketing_job, preferences))
+        self.assertIsNone(main.score_job_for_profile(hybrid_design_job, preferences))
+        self.assertIsNotNone(main.score_job_for_profile(unclear_marketing_job, preferences))
+
+    def test_jobicy_api_jobs_are_normalized_and_keep_source_listing_urls(self):
+        response = {
+            "jobs": [{
+                "jobTitle": "Remote Marketing Specialist",
+                "companyName": "Example Co",
+                "jobGeo": "Europe",
+                "jobDescription": "SEO and campaigns.",
+                "url": "https://jobicy.com/jobs/123-marketing",
+            }]
+        }
+        with patch.object(main, "get_json_api_response", return_value=response) as request:
+            jobs = main.get_jobicy_jobs()
+
+        self.assertEqual(
+            jobs,
+            [{
+                "title": "Remote Marketing Specialist",
+                "company": "Example Co",
+                "location": "Europe",
+                "description": "SEO and campaigns.",
+                "url": "https://jobicy.com/jobs/123-marketing",
+                "work_arrangement": "remote",
+                "source": "Jobicy",
+            }],
+        )
+        request.assert_called_once_with(
+            main.JOBICY_API_URL,
+            params={"count": 200},
+            headers={"Accept": "application/json"},
+        )
+
+    def test_remote_ok_api_jobs_are_normalized_and_keep_source_link(self):
+        response = [{
+            "id": "123",
+            "position": "Graphic Designer",
+            "company": "Example Co",
+            "location": "Worldwide",
+            "description": "Remote design work.",
+            "url": "https://remoteok.com/remote-jobs/123-graphic-designer",
+        }]
+        with patch.object(main, "get_json_api_response", return_value=response) as request:
+            jobs = main.get_remoteok_jobs()
+
+        self.assertEqual(jobs[0]["title"], "Graphic Designer")
+        self.assertEqual(jobs[0]["url"], response[0]["url"])
+        self.assertEqual(jobs[0]["source"], "Remote OK")
+        self.assertEqual(jobs[0]["work_arrangement"], "remote")
+        self.assertEqual(request.call_args.args[0], main.REMOTEOK_API_URL)
+        self.assertIn("User-Agent", request.call_args.kwargs["headers"])
+
+    def test_job_sources_continue_after_one_source_fails(self):
+        jobicy_job = make_job("Graphic Designer")
+        jobicy_job["source"] = "Jobicy"
+        source_jobs = [jobicy_job]
+        with (
+            patch.object(
+                main,
+                "get_remotive_jobs",
+                side_effect=main.requests.RequestException("offline"),
+            ),
+            patch.object(main, "get_arbeitnow_jobs", return_value=[]),
+            patch.object(main, "get_jobicy_jobs", return_value=source_jobs),
+            patch.object(main, "get_remoteok_jobs", return_value=[]),
+        ):
+            jobs = main.collect_jobs_from_sources()
+
+        self.assertEqual(jobs, source_jobs)
+
+    def test_job_sources_raise_clear_error_when_all_sources_fail(self):
+        with (
+            patch.object(main, "get_remotive_jobs", side_effect=OSError("offline")),
+            patch.object(main, "get_arbeitnow_jobs", side_effect=OSError("offline")),
+            patch.object(main, "get_jobicy_jobs", side_effect=OSError("offline")),
+            patch.object(main, "get_remoteok_jobs", side_effect=OSError("offline")),
+            self.assertRaisesRegex(main.JobSourceError, "All job sources failed"),
+        ):
+            main.collect_jobs_from_sources()
 
 
 class JobProcessingTests(unittest.TestCase):

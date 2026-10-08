@@ -32,9 +32,9 @@ class WebUiTests(unittest.TestCase):
         cls.server.server_close()
         cls.server_thread.join()
 
-    def request(self, path):
+    def request(self, path, headers=None):
         connection = http.client.HTTPConnection("127.0.0.1", self.port)
-        connection.request("GET", path)
+        connection.request("GET", path, headers=headers or {})
         response = connection.getresponse()
         body = response.read()
         headers = response.getheaders()
@@ -54,6 +54,66 @@ class WebUiTests(unittest.TestCase):
         response_body = response.read()
         connection.close()
         return response.status, json.loads(response_body)
+
+    def test_support_report_is_public_and_delivered_to_the_support_mailbox(self):
+        web_ui.SUPPORT_REPORT_TIMES.clear()
+        with (
+            patch.object(web_ui.cloud_store, "is_cloud_mode", return_value=True),
+            patch.object(
+                web_ui.email_notifications,
+                "send_support_report",
+            ) as send_report,
+        ):
+            status, body = self.post_json(
+                "/api/support-report",
+                {
+                    "issue_type": "jobs_missing",
+                    "details": "The jobs list did not refresh.",
+                    "contact_email": "person@example.com",
+                    "website": "",
+                },
+            )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body, {"sent": True})
+        send_report.assert_called_once_with(
+            "jobs_missing",
+            "The jobs list did not refresh.",
+            "person@example.com",
+        )
+
+    def test_support_report_rejects_missing_problem_details(self):
+        with patch.object(
+            web_ui.email_notifications,
+            "send_support_report",
+        ) as send_report:
+            status, body = self.post_json(
+                "/api/support-report",
+                {"issue_type": "other", "details": "  "},
+            )
+
+        self.assertEqual(status, 400)
+        self.assertIn("describe", body["error"])
+        send_report.assert_not_called()
+
+    def test_support_report_has_a_per_connection_rate_limit(self):
+        web_ui.SUPPORT_REPORT_TIMES.clear()
+        payload = {
+            "issue_type": "other",
+            "details": "A problem happened.",
+        }
+        with patch.object(web_ui.email_notifications, "send_support_report") as send_report:
+            results = [
+                self.post_json("/api/support-report", payload)[0]
+                for _ in range(web_ui.SUPPORT_REPORT_LIMIT + 1)
+            ]
+
+        self.assertEqual(
+            results,
+            [200] * web_ui.SUPPORT_REPORT_LIMIT + [429],
+        )
+        self.assertEqual(send_report.call_count, web_ui.SUPPORT_REPORT_LIMIT)
+        web_ui.SUPPORT_REPORT_TIMES.clear()
 
     def test_jobs_endpoint_returns_saved_json_jobs(self):
         jobs = [
@@ -136,6 +196,147 @@ class WebUiTests(unittest.TestCase):
             headers
         )
         self.assertIn(b"Remote Job Finder", body)
+        self.assertIn(b"gaitanosklitos@gmail.com", body)
+        self.assertIn(b"support-form", body)
+
+    def test_health_and_service_worker_are_served(self):
+        health_status, _, health_body = self.request("/health")
+        worker_status, worker_headers, worker_body = self.request("/service-worker.js")
+
+        self.assertEqual(health_status, 200)
+        self.assertEqual(json.loads(health_body), {"status": "ok"})
+        self.assertEqual(worker_status, 200)
+        self.assertIn(("Content-Type", "text/javascript; charset=utf-8"), worker_headers)
+        self.assertIn(b"showNotification", worker_body)
+
+    def test_cloud_api_rejects_requests_without_a_signed_in_user(self):
+        with patch.object(web_ui.cloud_store, "is_cloud_mode", return_value=True):
+            status, _, body = self.request("/api/jobs")
+
+        self.assertEqual(status, 401)
+        self.assertIn("sign in", json.loads(body)["error"].lower())
+
+    def test_cloud_jobs_use_the_authenticated_account(self):
+        jobs = [{"title": "Junior React Developer", "url": "https://example.com/job"}]
+        with (
+            patch.object(web_ui.cloud_store, "is_cloud_mode", return_value=True),
+            patch.object(
+                web_ui.cloud_store,
+                "authenticate",
+                return_value={"id": "user-123", "email": "person@example.com"},
+            ),
+            patch.object(
+                web_ui.cloud_store,
+                "get_user_preferences",
+                return_value={
+                    "profile_locked": True,
+                    "role_families": ["frontend_web"],
+                    "experience_levels": ["entry"],
+                    "work_arrangements": ["remote"],
+                },
+            ),
+            patch.object(
+                web_ui.cloud_store,
+                "get_jobs_for_user",
+                return_value=jobs,
+            ) as get_jobs,
+        ):
+            status, _, body = self.request(
+                "/api/jobs",
+                headers={"Authorization": "Bearer test-token"}
+            )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)[0]["title"], jobs[0]["title"])
+        get_jobs.assert_called_once_with("user-123")
+
+    def test_cloud_jobs_are_filtered_by_the_locked_user_profile(self):
+        jobs = [
+            {
+                "title": "Mid-level Graphic Designer",
+                "url": "https://example.com/design",
+                "description": "Hybrid position.",
+            },
+            {
+                "title": "Junior React Developer",
+                "url": "https://example.com/frontend",
+                "description": "Fully remote.",
+            },
+        ]
+        profile = {
+            "profile_locked": True,
+            "role_families": ["graphic_design"],
+            "experience_levels": ["mid"],
+            "work_arrangements": ["hybrid"],
+        }
+        with (
+            patch.object(web_ui.cloud_store, "is_cloud_mode", return_value=True),
+            patch.object(
+                web_ui.cloud_store,
+                "authenticate",
+                return_value={"id": "user-123"},
+            ),
+            patch.object(
+                web_ui.cloud_store,
+                "get_user_preferences",
+                return_value=profile,
+            ),
+            patch.object(
+                web_ui.cloud_store,
+                "get_jobs_for_user",
+                return_value=jobs,
+            ),
+        ):
+            status, _, body = self.request(
+                "/api/jobs",
+                headers={"Authorization": "Bearer test-token"}
+            )
+
+        self.assertEqual(status, 200)
+        results = json.loads(body)
+        self.assertEqual([job["url"] for job in results], ["https://example.com/design"])
+        self.assertEqual(results[0]["experience_level"], "mid")
+        self.assertEqual(results[0]["work_arrangement"], "hybrid")
+
+    def test_cloud_config_does_not_return_server_secrets(self):
+        cloud_config = {
+            "supabase_url": "https://example.supabase.co",
+            "supabase_anon_key": "public-key",
+            "vapid_public_key": "public-vapid-key",
+        }
+        with (
+            patch.object(web_ui.cloud_store, "is_cloud_mode", return_value=True),
+            patch.object(web_ui.cloud_store, "get_cloud_config", return_value=cloud_config),
+        ):
+            status, _, body = self.request("/api/config")
+
+        self.assertEqual(status, 200)
+        response = json.loads(body)
+        self.assertTrue(response["cloud"])
+        self.assertNotIn("service_role", response)
+        self.assertNotIn("VAPID_PRIVATE_KEY", response)
+
+    def test_cloud_notification_baseline_requires_and_uses_the_signed_in_user(self):
+        with (
+            patch.object(web_ui.cloud_store, "is_cloud_mode", return_value=True),
+            patch.object(
+                web_ui.cloud_store,
+                "authenticate",
+                return_value={"id": "user-123"},
+            ),
+            patch.object(
+                web_ui.cloud_store,
+                "get_latest_notification_id",
+                return_value="123",
+            ),
+        ):
+            status, _, body = self.request(
+                "/api/notifications/latest",
+                headers={"Authorization": "Bearer test-token"}
+            )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {"latest_id": "123"})
 
     def test_server_does_not_expose_other_project_files(self):
         status, _, _ = self.request("/main.py")
