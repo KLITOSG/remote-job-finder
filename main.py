@@ -19,6 +19,7 @@ except AttributeError:
 
 LOGGER = logging.getLogger(__name__)
 JOBICY_API_URL = "https://jobicy.com/api/v2/remote-jobs"
+JOBICY_GEO_FILTERS = ("europe", "greece", "italy", "spain", "portugal")
 REMOTEOK_API_URL = "https://remoteok.com/api"
 SOURCE_REQUEST_TIMEOUT = 20
 
@@ -179,30 +180,47 @@ def get_arbeitnow_jobs():
 
 
 def get_jobicy_jobs():
-    data = get_json_api_response(
-        JOBICY_API_URL,
-        params={"count": 200},
-        headers={"Accept": "application/json"},
-    )
-    if not isinstance(data, dict) or not isinstance(data.get("jobs"), list):
-        raise JobSourceError("Jobicy returned an unexpected response format.")
-
     jobs = []
-    for job in data["jobs"]:
-        if not isinstance(job, dict):
+    seen_urls = set()
+    failures = []
+    successful_filters = 0
+
+    for geo in JOBICY_GEO_FILTERS:
+        try:
+            data = get_json_api_response(
+                JOBICY_API_URL,
+                params={"count": 200, "geo": geo},
+                headers={"Accept": "application/json"},
+            )
+            if not isinstance(data, dict) or not isinstance(data.get("jobs"), list):
+                raise JobSourceError("Jobicy returned an unexpected response format.")
+        except (requests.RequestException, JobSourceError, OSError, ValueError) as exc:
+            failures.append(f"{geo}: {type(exc).__name__}: {exc}")
+            LOGGER.warning("Could not collect Jobicy listings for %s: %s", geo, exc)
             continue
-        url = job.get("url") or ""
-        if not url.startswith(("https://", "http://")):
-            continue
-        jobs.append({
-            "title": job.get("jobTitle") or "",
-            "company": job.get("companyName") or "",
-            "location": job.get("jobGeo") or "Remote",
-            "description": job.get("jobDescription") or job.get("jobExcerpt") or "",
-            "url": url,
-            "work_arrangement": "remote",
-            "source": "Jobicy",
-        })
+
+        successful_filters += 1
+        for job in data["jobs"]:
+            if not isinstance(job, dict):
+                continue
+            url = job.get("url") or ""
+            if not url.startswith(("https://", "http://")) or url in seen_urls:
+                continue
+            seen_urls.add(url)
+            jobs.append({
+                "title": job.get("jobTitle") or "",
+                "company": job.get("companyName") or "",
+                "location": job.get("jobGeo") or "Remote",
+                "description": job.get("jobDescription") or job.get("jobExcerpt") or "",
+                "url": url,
+                "work_arrangement": "remote",
+                "source": "Jobicy",
+            })
+
+    if not successful_filters:
+        raise JobSourceError(
+            "All Jobicy location filters failed. " + " | ".join(failures)
+        )
     return jobs
 
 

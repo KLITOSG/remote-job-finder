@@ -132,6 +132,10 @@ statuses.
   [Remote OK](https://remoteok.com/api). These new sources do not require an API
   key. Job cards identify their source and link to that source's listing, as the
   providers request. The worker checks them during its normal hourly run.
+- Jobicy is queried with Europe-wide and Greece, Italy, Spain, and Portugal
+  location filters; duplicate listing URLs are collapsed before processing. Its
+  public feed asks consumers to credit Jobicy and link application buttons to
+  the original listing.
 - If one provider is temporarily down, collection continues from the others.
   If every provider fails, the worker records the failed check and retries on
   its next scheduled run.

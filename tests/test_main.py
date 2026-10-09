@@ -208,7 +208,7 @@ class JobScoringTests(unittest.TestCase):
         self.assertIsNone(main.score_job_for_profile(us_job, preferences))
         self.assertIsNotNone(main.score_job_for_profile(unspecified_job, preferences))
 
-    def test_jobicy_api_jobs_are_normalized_and_keep_source_listing_urls(self):
+    def test_jobicy_fetches_eu_geo_filters_and_deduplicates_listing_urls(self):
         response = {
             "jobs": [{
                 "jobTitle": "Remote Marketing Specialist",
@@ -233,11 +233,29 @@ class JobScoringTests(unittest.TestCase):
                 "source": "Jobicy",
             }],
         )
-        request.assert_called_once_with(
-            main.JOBICY_API_URL,
-            params={"count": 200},
-            headers={"Accept": "application/json"},
+        self.assertEqual(
+            [call.kwargs["params"] for call in request.call_args_list],
+            [
+                {"count": 200, "geo": geo}
+                for geo in main.JOBICY_GEO_FILTERS
+            ],
         )
+        self.assertEqual(request.call_count, len(main.JOBICY_GEO_FILTERS))
+
+    def test_jobicy_keeps_successful_geo_results_when_a_filter_fails(self):
+        response = {"jobs": [{
+            "jobTitle": "Remote Marketing Specialist",
+            "url": "https://jobicy.com/jobs/123-marketing",
+        }]}
+        with patch.object(
+            main,
+            "get_json_api_response",
+            side_effect=[response, main.requests.Timeout("offline"), response, response, response],
+        ):
+            jobs = main.get_jobicy_jobs()
+
+        self.assertEqual(len(jobs), 1)
+        self.assertEqual(jobs[0]["url"], response["jobs"][0]["url"])
 
     def test_remote_ok_api_jobs_are_normalized_and_keep_source_link(self):
         response = [{
