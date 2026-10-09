@@ -462,12 +462,105 @@
         .state.error { border-color: #a7505a; color: #ffb6bc; }
 
         @media (max-width: 650px) {
-            .shell { width: min(100% - 24px, 1100px); padding-top: 30px; }
+            .shell {
+                width: min(100% - 24px, 1100px);
+                padding: 22px 0 calc(40px + env(safe-area-inset-bottom));
+            }
+
+            h1 {
+                margin-top: 12px;
+                font-size: clamp(2rem, 10vw, 3.2rem);
+                line-height: 1.02;
+            }
+
+            .intro { font-size: 1rem; line-height: 1.5; }
+
+            .auth-panel {
+                margin-top: 5vh;
+                padding: 22px;
+            }
+
+            .account-bar {
+                justify-content: stretch;
+                gap: 8px;
+                margin-bottom: 24px;
+            }
+
+            #account-email {
+                width: 100%;
+                overflow-wrap: anywhere;
+            }
+
+            .account-button { min-height: 44px; }
+
+            .preferences {
+                margin: 18px 0 22px;
+                padding: 16px;
+            }
+
+            .preference-groups { grid-template-columns: 1fr; }
+            .preference-group { padding: 12px; }
+            .preference-option { min-height: 38px; align-items: center; }
+            .preference-option input { flex: 0 0 auto; }
+            .preference-actions { align-items: stretch; flex-direction: column; }
+            .preference-actions button { width: 100%; min-height: 46px; }
+
             .toolbar { grid-template-columns: 1fr; }
-            .card { padding: 17px; }
-            .card-top { flex-direction: column-reverse; gap: 11px; }
-            .summary { align-items: flex-start; flex-direction: column; }
-            .monitoring { align-items: flex-start; flex-direction: column; }
+            .control { width: 100%; min-height: 50px; font-size: 16px; }
+            .lists { gap: 6px; }
+            .lists .chip { flex: 1 1 0; min-height: 44px; padding: 8px; }
+            .chips { gap: 7px; margin-bottom: 20px; }
+            .chips .chip { min-height: 42px; }
+
+            .summary {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 4px;
+            }
+
+            .card { padding: 16px; border-radius: 14px; }
+            .card-top { align-items: flex-start; gap: 10px; }
+            .card-top > div { min-width: 0; }
+            .card h2 { overflow-wrap: anywhere; font-size: 1.15rem; line-height: 1.3; }
+            .match { max-width: 45%; padding: 6px 8px; text-align: center; }
+            .details { gap: 7px; margin: 14px 0 16px; }
+            .detail { max-width: 100%; overflow-wrap: anywhere; }
+
+            .card-bottom {
+                align-items: stretch;
+                flex-direction: column;
+                gap: 10px;
+                margin-top: 16px;
+            }
+
+            .job-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .apply, .status-action { width: 100%; min-height: 44px; padding: 8px; text-align: center; }
+
+            .monitoring {
+                align-items: stretch;
+                flex-direction: column;
+                gap: 12px;
+                margin: 20px 0;
+                padding: 14px;
+            }
+
+            .notification-toggle { width: 100%; min-height: 46px; white-space: normal; }
+            .support-panel { margin-top: 24px; padding: 16px; }
+            .support-panel a { overflow-wrap: anywhere; }
+            .support-form { max-width: none; }
+            .support-form button { width: 100%; min-height: 46px; }
+        }
+
+        @media (max-width: 380px) {
+            .shell { width: calc(100% - 20px); }
+            .auth-panel { padding: 18px; }
+            .account-bar { flex-direction: column; }
+            .account-bar .account-button { width: 100%; }
+            .card { padding: 14px; }
+            .card-top { flex-direction: column; }
+            .match { max-width: 100%; }
+            .job-actions { grid-template-columns: 1fr; }
+            .topline { font-size: .7rem; letter-spacing: .1em; }
         }
     </style>
 </head>
