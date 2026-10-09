@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#101827">
+    <title>You're offline | Remote Job Finder</title>
+    <style>
+        :root { color-scheme: dark; font-family: "Segoe UI", sans-serif; background: #101827; color: #f3f6fc; }
+        body { min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 24px; }
+        main { width: min(440px, 100%); padding: 28px; border: 1px solid #34435a; border-radius: 18px; background: #172337; }
+        h1 { margin-top: 0; }
+        p { color: #c5d0df; line-height: 1.55; }
+        button { min-height: 46px; padding: 0 18px; border: 0; border-radius: 10px; background: #7664ee; color: white; font: inherit; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>You're offline</h1>
+        <p>Connect to the internet to load your job search, saved listings, and account.</p>
+        <button type="button" onclick="location.reload()">Try again</button>
+    </main>
+</body>
+</html>

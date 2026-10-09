@@ -202,12 +202,37 @@ class WebUiTests(unittest.TestCase):
     def test_health_and_service_worker_are_served(self):
         health_status, _, health_body = self.request("/health")
         worker_status, worker_headers, worker_body = self.request("/service-worker.js")
+        manifest_status, manifest_headers, manifest_body = self.request("/manifest.webmanifest")
+        offline_status, _, offline_body = self.request("/offline.html")
 
         self.assertEqual(health_status, 200)
         self.assertEqual(json.loads(health_body), {"status": "ok"})
         self.assertEqual(worker_status, 200)
         self.assertIn(("Content-Type", "text/javascript; charset=utf-8"), worker_headers)
         self.assertIn(b"showNotification", worker_body)
+        self.assertIn(b"remote-job-finder-shell-v1", worker_body)
+        self.assertEqual(manifest_status, 200)
+        self.assertIn(
+            ("Content-Type", "application/manifest+json"),
+            manifest_headers
+        )
+        manifest = json.loads(manifest_body)
+        self.assertEqual(manifest["id"], "/")
+        self.assertEqual(
+            {icon["sizes"] for icon in manifest["icons"]},
+            {"192x192", "512x512"}
+        )
+        self.assertEqual(offline_status, 200)
+        self.assertIn(b"You're offline", offline_body)
+
+    def test_android_pwa_icons_are_served_as_svg(self):
+        for path in ("/icon-192.svg", "/icon-512.svg"):
+            with self.subTest(path=path):
+                status, headers, body = self.request(path)
+
+                self.assertEqual(status, 200)
+                self.assertIn(("Content-Type", "image/svg+xml"), headers)
+                self.assertIn(b"<svg", body)
 
     def test_cloud_api_rejects_requests_without_a_signed_in_user(self):
         with patch.object(web_ui.cloud_store, "is_cloud_mode", return_value=True):

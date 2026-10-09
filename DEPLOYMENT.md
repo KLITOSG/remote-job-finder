@@ -124,6 +124,40 @@ the local `jobs.json` file. Only entries whose status is `saved` or `applied`
 are imported into that signed-in account. Other users do not inherit those
 statuses.
 
+## Google Play preparation (Android TWA)
+
+The site now has an installable-app manifest with 192 px and 512 px icons and a
+network-failure page for navigation requests. These prepare the web app for a
+Trusted Web Activity (TWA), which can present the existing HTTPS site as an
+Android app without maintaining a second UI.
+
+The Play release project is not scaffolded yet. Before generating it:
+
+- Choose the Android package name carefully; Google Play package names are
+  permanent. Build and sign an Android App Bundle (`.aab`) for submission.
+- Set up Digital Asset Links at
+  `https://remote-job-finder-w20c.onrender.com/.well-known/assetlinks.json`
+  using the final package name and the SHA-256 certificate fingerprint for the
+  Play App Signing certificate. This lets Android verify the app and website
+  belong together.
+- Publish a privacy policy and implement both an in-app account-deletion path
+  and a public web page where users can request deletion. The current app has
+  Google sign-in but does not yet provide account deletion, so this is a release
+  blocker.
+- Complete the Play Console Data safety and data-deletion declarations from the
+  app's actual data practices, and provide reviewer access instructions for any
+  features behind sign-in.
+- Prepare Play listing assets and information (store icon, screenshots,
+  description, contact details, content rating, and audience declarations).
+  Personal developer accounts may also have a testing requirement before a
+  production release; check the current
+  [Play testing requirements](https://support.google.com/googleplay/android-developer/answer/14151465).
+
+The Render URL is HTTPS and can be used to begin TWA development. A custom
+domain is not required for the initial setup, but confirm it is the intended
+long-term app URL before release because changing the verified web origin later
+requires updating the Android association and app configuration.
+
 ## Operational notes
 
 - The app uses public job feeds from [Remotive](https://remotive.com/remote-jobs/api),

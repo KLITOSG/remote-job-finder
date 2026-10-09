@@ -170,8 +170,17 @@ class JobFinderRequestHandler(BaseHTTPRequestHandler):
         if path == "/icon.svg":
             self.send_static_file("icon.svg", "image/svg+xml")
             return
+        if path == "/icon-192.svg":
+            self.send_static_file("icon-192.svg", "image/svg+xml")
+            return
+        if path == "/icon-512.svg":
+            self.send_static_file("icon-512.svg", "image/svg+xml")
+            return
         if path == "/manifest.webmanifest":
             self.send_static_file("manifest.webmanifest", "application/manifest+json")
+            return
+        if path == "/offline.html":
+            self.send_static_file("offline.html", "text/html; charset=utf-8")
             return
 
         if cloud_store.is_cloud_mode():
