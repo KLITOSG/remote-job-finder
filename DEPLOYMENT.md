@@ -5,15 +5,16 @@ uses GitHub Actions to check the job sources hourly. The scheduled check does
 not depend on a user's computer or browser being on. GitHub's scheduler is
 best-effort (not an exact-time guarantee), and Render's free web service can
 sleep while idle.
-Each signed-in user can lock a personal job-family, experience-level, and work
-arrangement search. Saved and Applied statuses are private to each account.
+Each signed-in user can lock a personal job-family, experience-level, work
+arrangement, and EU-country search. Saved and Applied statuses are private to
+each account.
 
 ## 1. Create the Supabase project
 
 1. Create a Supabase project and keep its database password private.
 2. Open the Supabase SQL editor and run all of `supabase_schema.sql`. It is
    safe to rerun after deployments; it adds the required classification columns
-   to an existing jobs table as well as creating the new profile and email tables.
+   to an existing jobs table and creates/updates the profile and email tables.
 3. In **Authentication → Providers**, enable Google.
 4. Create OAuth credentials in Google Cloud Console. Set the Google OAuth
    authorized redirect URI to `https://<project-ref>.supabase.co/auth/v1/callback`.
@@ -90,10 +91,16 @@ to wake after inactivity.
 
 ## Personal searches and email alerts
 
-After signing in, choose one or more job families, experience levels, and work
-arrangements, then save and lock the search. The worker uses those preferences
-to match newly collected listings; jobs with unclear level or arrangement remain
-eligible and are labeled Unspecified. Unlock the search before changing it.
+After signing in, choose job families, experience levels, work arrangements, and
+the EU countries where you can work, then save and lock the search. All EU
+countries are selected initially; narrow the list as needed. The worker uses
+those preferences for dashboard results and notifications. Listings explicitly
+located in selected countries match; Europe-wide and location-unspecified remote
+listings remain eligible, and clearly non-EU locations are excluded. Location
+labels depend on the source feed, so city-only or ambiguous listings may remain
+eligible if the country cannot be identified. Recognized non-EU destinations are
+excluded; unrecognized location text remains eligible rather than being
+discarded. Unlock the search before changing it.
 
 To enable email alerts later, verify a sending domain in Resend, create an API
 key, and set `RESEND_API_KEY` and `EMAIL_FROM` as GitHub repository secrets. The

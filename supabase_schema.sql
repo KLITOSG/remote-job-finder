@@ -58,10 +58,22 @@ create table if not exists public.user_preferences (
     role_families text[] not null default '{}',
     experience_levels text[] not null default '{}',
     work_arrangements text[] not null default '{}',
+    preferred_locations text[] not null default ARRAY[
+        'at', 'be', 'bg', 'hr', 'cy', 'cz', 'dk', 'ee', 'fi', 'fr', 'de',
+        'gr', 'hu', 'ie', 'it', 'lv', 'lt', 'lu', 'mt', 'nl', 'pl', 'pt',
+        'ro', 'sk', 'si', 'es', 'se'
+    ]::text[],
     email_notifications boolean not null default false,
     profile_locked boolean not null default false,
     updated_at timestamptz not null default now()
 );
+
+alter table public.user_preferences
+    add column if not exists preferred_locations text[] not null default ARRAY[
+        'at', 'be', 'bg', 'hr', 'cy', 'cz', 'dk', 'ee', 'fi', 'fr', 'de',
+        'gr', 'hu', 'ie', 'it', 'lv', 'lt', 'lu', 'mt', 'nl', 'pl', 'pt',
+        'ro', 'sk', 'si', 'es', 'se'
+    ]::text[];
 
 create table if not exists public.job_events (
     id bigint generated always as identity primary key,

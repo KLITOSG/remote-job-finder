@@ -154,6 +154,7 @@ class JobScoringTests(unittest.TestCase):
             "role_families": ["digital_marketing"],
             "experience_levels": ["entry"],
             "work_arrangements": ["remote"],
+            "preferred_locations": ["gr", "it", "es", "pt", "fr"],
         }
         remote_entry_marketing_job = make_job(
             "Entry-Level Digital Marketing Specialist",
@@ -181,6 +182,31 @@ class JobScoringTests(unittest.TestCase):
         self.assertIsNone(main.score_job_for_profile(senior_marketing_job, preferences))
         self.assertIsNone(main.score_job_for_profile(hybrid_design_job, preferences))
         self.assertIsNotNone(main.score_job_for_profile(unclear_marketing_job, preferences))
+
+    def test_location_preferences_match_selected_eu_countries_and_europe_wide_roles(self):
+        preferences = {
+            "role_families": ["digital_marketing"],
+            "experience_levels": ["entry"],
+            "work_arrangements": ["remote"],
+            "preferred_locations": ["gr", "it", "es", "pt"],
+        }
+        greek_job = make_job(
+            "Entry-Level Digital Marketing Specialist",
+            description="Remote work. Requires 1-2 years of experience.",
+        )
+        greek_job["location"] = "Athens, Greece"
+        italian_job = {**greek_job, "location": "Milan, Italy"}
+        european_job = {**greek_job, "location": "Remote - Europe"}
+        french_job = {**greek_job, "location": "Paris, France"}
+        us_job = {**greek_job, "location": "Remote - United States"}
+        unspecified_job = {**greek_job, "location": "Remote"}
+
+        self.assertIsNotNone(main.score_job_for_profile(greek_job, preferences))
+        self.assertIsNotNone(main.score_job_for_profile(italian_job, preferences))
+        self.assertIsNotNone(main.score_job_for_profile(european_job, preferences))
+        self.assertIsNone(main.score_job_for_profile(french_job, preferences))
+        self.assertIsNone(main.score_job_for_profile(us_job, preferences))
+        self.assertIsNotNone(main.score_job_for_profile(unspecified_job, preferences))
 
     def test_jobicy_api_jobs_are_normalized_and_keep_source_listing_urls(self):
         response = {

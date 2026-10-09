@@ -27,6 +27,89 @@ class JobSourceError(RuntimeError):
     pass
 
 
+EU_COUNTRY_ALIASES = {
+    "at": ("austria", "vienna", "graz"),
+    "be": ("belgium", "brussels", "antwerp"),
+    "bg": ("bulgaria", "sofia"),
+    "hr": ("croatia", "zagreb", "split"),
+    "cy": ("cyprus", "nicosia", "limassol"),
+    "cz": ("czechia", "czech republic", "prague"),
+    "dk": ("denmark", "copenhagen", "aarhus"),
+    "ee": ("estonia", "tallinn"),
+    "fi": ("finland", "helsinki", "tampere"),
+    "fr": ("france", "paris", "lyon", "marseille", "bordeaux"),
+    "de": ("germany", "berlin", "munich", "hamburg", "frankfurt"),
+    "gr": ("greece", "athens", "thessaloniki"),
+    "hu": ("hungary", "budapest"),
+    "ie": ("ireland", "dublin", "cork"),
+    "it": ("italy", "rome", "milan", "turin", "florence"),
+    "lv": ("latvia", "riga"),
+    "lt": ("lithuania", "vilnius", "kaunas"),
+    "lu": ("luxembourg",),
+    "mt": ("malta", "valletta"),
+    "nl": ("netherlands", "the netherlands", "amsterdam", "rotterdam"),
+    "pl": ("poland", "warsaw", "krakow", "wroclaw"),
+    "pt": ("portugal", "lisbon", "lisboa", "porto"),
+    "ro": ("romania", "bucharest", "cluj"),
+    "sk": ("slovakia", "bratislava"),
+    "si": ("slovenia", "ljubljana"),
+    "es": ("spain", "españa", "madrid", "barcelona", "valencia", "seville"),
+    "se": ("sweden", "stockholm", "gothenburg"),
+}
+EU_COUNTRY_CODES = frozenset(EU_COUNTRY_ALIASES)
+EU_WIDE_LOCATION_ALIASES = (
+    "european union",
+    "europe-wide",
+    "europe",
+    "eu-wide",
+    "eu",
+)
+NON_EU_LOCATION_ALIASES = (
+    "united states",
+    "united states of america",
+    "u.s.a.",
+    "u.s.",
+    "us",
+    "usa",
+    "canada",
+    "australia",
+    "japan",
+    "united kingdom",
+    "uk",
+    "great britain",
+    "switzerland",
+    "norway",
+    "india",
+    "singapore",
+    "new zealand",
+    "brazil",
+    "south africa",
+    "israel",
+    "united arab emirates",
+)
+
+
+def _location_contains(location, aliases):
+    return any(
+        re.search(r"(?<![a-z])" + re.escape(alias) + r"(?![a-z])", location)
+        for alias in aliases
+    )
+
+
+def classify_eu_location(location):
+    normalized = str(location or "").casefold()
+    if not normalized:
+        return set(), False, False
+    country_codes = {
+        country_code
+        for country_code, aliases in EU_COUNTRY_ALIASES.items()
+        if _location_contains(normalized, aliases)
+    }
+    is_eu_wide = _location_contains(normalized, EU_WIDE_LOCATION_ALIASES)
+    is_non_eu = _location_contains(normalized, NON_EU_LOCATION_ALIASES)
+    return (country_codes, is_eu_wide, is_non_eu)
+
+
 def get_json_api_response(url, *, params=None, headers=None):
     response = requests.get(
         url,
@@ -498,8 +581,19 @@ def score_job_for_profile(job, preferences):
     selected_families = set(preferences.get("role_families") or [])
     selected_levels = set(preferences.get("experience_levels") or [])
     selected_arrangements = set(preferences.get("work_arrangements") or [])
+    selected_locations = set(preferences.get("preferred_locations") or [])
 
-    if not selected_families or not selected_levels or not selected_arrangements:
+    if (
+        not selected_families
+        or not selected_levels
+        or not selected_arrangements
+        or (preferences.get("preferred_locations") is not None and not selected_locations)
+    ):
+        return None
+    job_locations, eu_wide, non_eu = classify_eu_location(job.get("location"))
+    if job_locations and not job_locations.intersection(selected_locations):
+        return None
+    if non_eu and not job_locations and not eu_wide:
         return None
     if not selected_families.intersection(job["role_families"]):
         return None
@@ -518,6 +612,10 @@ def score_job_for_profile(job, preferences):
     if job["experience_level"] in selected_levels:
         score += 4
     if job["work_arrangement"] in selected_arrangements:
+        score += 2
+    if job_locations.intersection(selected_locations):
+        score += 3
+    elif eu_wide:
         score += 2
     description = get_description_text(job.get("description")).lower()
     profile_terms = {

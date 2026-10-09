@@ -8,6 +8,11 @@ import requests
 REQUEST_TIMEOUT = 20
 EXPERIENCE_LEVELS = {"entry", "mid", "senior"}
 WORK_ARRANGEMENTS = {"remote", "hybrid"}
+PREFERRED_LOCATIONS = {
+    "at", "be", "bg", "hr", "cy", "cz", "dk", "ee", "fi", "fr", "de",
+    "gr", "hu", "ie", "it", "lv", "lt", "lu", "mt", "nl", "pl", "pt",
+    "ro", "sk", "si", "es", "se",
+}
 
 ROLE_FAMILY_IDS = {
     "frontend_web",
@@ -203,6 +208,7 @@ def get_user_preferences(user_id):
         params={
             "select": (
                 "user_id,role_families,experience_levels,work_arrangements,"
+                "preferred_locations,"
                 "email_notifications,profile_locked"
             ),
             "user_id": f"eq.{user_id}",
@@ -220,7 +226,8 @@ def get_user_profiles():
         params={
             "select": (
                 "user_id,notification_email,role_families,experience_levels,"
-                "work_arrangements,email_notifications,profile_locked"
+                "work_arrangements,preferred_locations,email_notifications,"
+                "profile_locked"
             ),
             "profile_locked": "eq.true",
         },
@@ -240,6 +247,7 @@ def save_user_preferences(user, preferences):
     role_families = preferences.get("role_families")
     experience_levels = preferences.get("experience_levels")
     work_arrangements = preferences.get("work_arrangements")
+    preferred_locations = preferences.get("preferred_locations")
     email_notifications = preferences.get("email_notifications")
     if (
         not isinstance(role_families, list)
@@ -262,6 +270,13 @@ def save_user_preferences(user, preferences):
         or not set(work_arrangements).issubset(WORK_ARRANGEMENTS)
     ):
         raise ValueError("Choose Remote, Hybrid, or both.")
+    if (
+        not isinstance(preferred_locations, list)
+        or not preferred_locations
+        or not all(isinstance(value, str) for value in preferred_locations)
+        or not set(preferred_locations).issubset(PREFERRED_LOCATIONS)
+    ):
+        raise ValueError("Choose at least one EU country.")
     if not isinstance(email_notifications, bool):
         raise ValueError("Email notifications must be enabled or disabled.")
     email = user.get("email")
@@ -280,6 +295,7 @@ def save_user_preferences(user, preferences):
             "role_families": sorted(set(role_families)),
             "experience_levels": sorted(set(experience_levels)),
             "work_arrangements": sorted(set(work_arrangements)),
+            "preferred_locations": sorted(set(preferred_locations)),
             "email_notifications": email_notifications,
             "profile_locked": True,
         }],

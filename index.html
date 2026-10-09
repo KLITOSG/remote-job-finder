@@ -102,6 +102,21 @@
             font-weight: 700;
         }
 
+        .location-tools {
+            display: flex;
+            justify-content: flex-end;
+            margin: 2px 0 8px;
+        }
+
+        .location-options {
+            display: grid;
+            max-height: 230px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 2px 10px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
         .preference-option {
             display: flex;
             align-items: flex-start;
@@ -500,6 +515,8 @@
 
             .preference-groups { grid-template-columns: 1fr; }
             .preference-group { padding: 12px; }
+            .location-options { max-height: 260px; }
+            .location-options .preference-option { overflow-wrap: anywhere; }
             .preference-option { min-height: 38px; align-items: center; }
             .preference-option input { flex: 0 0 auto; }
             .preference-actions { align-items: stretch; flex-direction: column; }
@@ -618,6 +635,42 @@
                     <legend>Work arrangement</legend>
                     <label class="preference-option"><input type="checkbox" name="work_arrangements" value="remote"> Remote</label>
                     <label class="preference-option"><input type="checkbox" name="work_arrangements" value="hybrid"> Hybrid</label>
+                </fieldset>
+                <fieldset class="preference-group location-group" data-preference-group="preferred_locations">
+                    <legend>EU job locations</legend>
+                    <p>Choose the EU countries where you can work. All EU countries start selected.</p>
+                    <div class="location-tools">
+                        <button class="account-button" id="select-all-eu" type="button">Select all EU</button>
+                    </div>
+                    <div class="location-options">
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="at"> Austria</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="be"> Belgium</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="bg"> Bulgaria</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="hr"> Croatia</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="cy"> Cyprus</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="cz"> Czechia</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="dk"> Denmark</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="ee"> Estonia</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="fi"> Finland</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="fr"> France</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="de"> Germany</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="gr"> Greece</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="hu"> Hungary</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="ie"> Ireland</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="it"> Italy</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="lv"> Latvia</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="lt"> Lithuania</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="lu"> Luxembourg</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="mt"> Malta</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="nl"> Netherlands</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="pl"> Poland</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="pt"> Portugal</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="ro"> Romania</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="sk"> Slovakia</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="si"> Slovenia</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="es"> Spain</label>
+                        <label class="preference-option"><input type="checkbox" name="preferred_locations" value="se"> Sweden</label>
+                    </div>
                 </fieldset>
             </div>
             <label class="preference-option">
@@ -790,6 +843,10 @@
         const savePreferencesButton = document.querySelector("#save-preferences");
         const unlockPreferencesButton = document.querySelector("#unlock-preferences");
         const emailAlerts = document.querySelector("#email-alerts");
+        const euLocationInputs = Array.from(
+            preferencesPanel.querySelectorAll('input[name="preferred_locations"]')
+        );
+        const allEuLocationCodes = euLocationInputs.map((input) => input.value);
         const quickFilters = new Set();
         let activeStatus = "all";
         let jobs = [];
@@ -837,6 +894,9 @@
                 role_families: profile?.role_families || [],
                 experience_levels: profile?.experience_levels || [],
                 work_arrangements: profile?.work_arrangements || [],
+                preferred_locations: profile?.preferred_locations?.length
+                    ? profile.preferred_locations
+                    : allEuLocationCodes,
             };
             for (const [name, selected] of Object.entries(values)) {
                 preferencesPanel.querySelectorAll(`input[name="${name}"]`).forEach((input) => {
@@ -852,7 +912,7 @@
             savePreferencesButton.hidden = locked;
             unlockPreferencesButton.hidden = !locked;
             profileLockStatus.textContent = locked
-                ? `Search saved and locked · ${values.role_families.length} job family${values.role_families.length === 1 ? "" : "ies"} selected`
+                ? `Search saved and locked · ${values.role_families.length} job families · ${values.preferred_locations.length} EU countries`
                 : "Your choices are saved to this Google account when you lock your search.";
         }
 
@@ -863,6 +923,7 @@
                 role_families: getCheckedValues("role_families"),
                 experience_levels: getCheckedValues("experience_levels"),
                 work_arrangements: getCheckedValues("work_arrangements"),
+                preferred_locations: getCheckedValues("preferred_locations"),
                 email_notifications: emailAlerts.checked,
             };
             savePreferencesButton.disabled = true;
@@ -1370,6 +1431,11 @@
         if (cloudMode) {
             savePreferencesButton.addEventListener("click", savePreferences);
             unlockPreferencesButton.addEventListener("click", unlockPreferences);
+            document.querySelector("#select-all-eu").addEventListener("click", () => {
+                euLocationInputs.forEach((input) => {
+                    input.checked = true;
+                });
+            });
             signInButton.addEventListener("click", async () => {
                 authError.textContent = "";
                 signInButton.disabled = true;

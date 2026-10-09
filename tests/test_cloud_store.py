@@ -96,6 +96,7 @@ class CloudStoreTests(unittest.TestCase):
             "role_families": ["digital_marketing", "graphic_design"],
             "experience_levels": ["entry", "mid"],
             "work_arrangements": ["remote", "hybrid"],
+            "preferred_locations": ["gr", "it", "es", "pt"],
             "email_notifications": True,
         }
         with (
@@ -110,6 +111,7 @@ class CloudStoreTests(unittest.TestCase):
         self.assertTrue(row["email_notifications"])
         self.assertTrue(row["profile_locked"])
         self.assertEqual(set(row["role_families"]), {"digital_marketing", "graphic_design"})
+        self.assertEqual(set(row["preferred_locations"]), {"gr", "it", "es", "pt"})
 
     def test_locked_preferences_cannot_be_changed_without_unlocking(self):
         with (
@@ -148,6 +150,13 @@ class CloudStoreTests(unittest.TestCase):
                 "work_arrangements": ["remote"],
                 "email_notifications": False,
             },
+            {
+                "role_families": ["graphic_design"],
+                "experience_levels": ["entry"],
+                "work_arrangements": ["remote"],
+                "preferred_locations": ["not-an-eu-country"],
+                "email_notifications": False,
+            },
         ]
         with patch.object(cloud_store, "get_user_preferences", return_value=None):
             for profile in invalid_profiles:
@@ -162,6 +171,7 @@ class CloudStoreTests(unittest.TestCase):
             "role_families": ["digital_marketing"],
             "experience_levels": ["mid"],
             "work_arrangements": ["remote"],
+            "preferred_locations": ["gr", "it", "es", "pt"],
             "email_notifications": True,
         }
         with (
