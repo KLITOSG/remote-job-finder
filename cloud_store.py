@@ -35,9 +35,10 @@ ROLE_FAMILY_IDS = {
 
 class CloudServiceError(RuntimeError):
 
-    def __init__(self, message, status=502):
+    def __init__(self, message, status=502, upstream_status=None):
         super().__init__(message)
         self.status = status
+        self.upstream_status = upstream_status
 
 
 def is_cloud_mode():
@@ -100,7 +101,11 @@ def _service_request(method, path, *, params=None, data=None, headers=None):
         message = f"Cloud database request failed ({response.status_code})"
         if detail:
             message += f": {detail}"
-        raise CloudServiceError(message, status=502)
+        raise CloudServiceError(
+            message,
+            status=502,
+            upstream_status=response.status_code,
+        )
 
     if not response.content:
         return None
@@ -150,22 +155,27 @@ def _select_all_jobs():
     start = 0
     page_size = 1000
     while True:
-        page = _service_request(
-            "GET",
-            "jobs",
-            params={
-                "select": (
-                    "url,title,company,location,description,source,score,match_category,"
-                    "role_families,experience_level,work_arrangement"
-                ),
-                "order": "score.desc,url.asc",
-                "limit": str(page_size),
-            },
-            headers={
-                "Range-Unit": "items",
-                "Range": f"{start}-{start + page_size - 1}",
-            },
-        )
+        try:
+            page = _service_request(
+                "GET",
+                "jobs",
+                params={
+                    "select": (
+                        "url,title,company,location,description,source,score,match_category,"
+                        "role_families,experience_level,work_arrangement"
+                    ),
+                    "order": "score.desc,url.asc",
+                    "limit": str(page_size),
+                },
+                headers={
+                    "Range-Unit": "items",
+                    "Range": f"{start}-{start + page_size - 1}",
+                },
+            )
+        except CloudServiceError as exc:
+            if rows and exc.upstream_status == 416:
+                return rows
+            raise
         if not isinstance(page, list):
             raise CloudServiceError("Cloud database returned an invalid jobs list.")
         rows.extend(page)

@@ -11,6 +11,44 @@ from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 class CloudStoreTests(unittest.TestCase):
 
+    def test_all_jobs_pagination_stops_after_complete_rows_when_range_exceeds_total(self):
+        jobs = [{"url": f"https://example.com/jobs/{index}"} for index in range(1000)]
+        out_of_range = cloud_store.CloudServiceError(
+            "Cloud database request failed (416): Requested range not satisfiable",
+            upstream_status=416,
+        )
+        with patch.object(
+            cloud_store,
+            "_service_request",
+            side_effect=[jobs, out_of_range],
+        ) as request:
+            result = cloud_store.get_all_jobs()
+
+        self.assertEqual(result, jobs)
+        self.assertEqual(request.call_count, 2)
+        self.assertEqual(
+            request.call_args_list[1].kwargs["headers"]["Range"],
+            "1000-1999",
+        )
+
+    def test_all_jobs_pagination_does_not_hide_first_page_range_error(self):
+        out_of_range = cloud_store.CloudServiceError(
+            "Cloud database request failed (416): Requested range not satisfiable",
+            upstream_status=416,
+        )
+        with (
+            patch.object(
+                cloud_store,
+                "_service_request",
+                side_effect=out_of_range,
+            ),
+            self.assertRaisesRegex(
+                cloud_store.CloudServiceError,
+                "Requested range not satisfiable",
+            ),
+        ):
+            cloud_store.get_all_jobs()
+
     def test_config_never_exposes_the_service_role_key(self):
         environment = {
             "SUPABASE_URL": "https://example.supabase.co",

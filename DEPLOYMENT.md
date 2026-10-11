@@ -131,10 +131,32 @@ network-failure page for navigation requests. These prepare the web app for a
 Trusted Web Activity (TWA), which can present the existing HTTPS site as an
 Android app without maintaining a second UI.
 
-The Play release project is not scaffolded yet. Before generating it:
+The Android Trusted Web Activity project is scaffolded in `android/` from the
+live manifest. It uses the proposed package ID `com.remotejobfinder.app`,
+targets API 36, and wraps the existing Render app rather than maintaining a
+second UI. The package ID has not yet been checked or registered in Play
+Console.
 
-- Choose the Android package name carefully; Google Play package names are
-  permanent. Build and sign an Android App Bundle (`.aab`) for submission.
+The local debug build can be checked from PowerShell with Java 17:
+
+```powershell
+cd android
+$env:JAVA_HOME = "$env:LOCALAPPDATA\Android\toolchain\jdk-17"
+$env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
+$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+$env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
+.\gradlew.bat assembleDebug
+```
+
+The wrapper currently requires Android 7.0 (API 24) or newer. This produces a
+debug APK only; it is not a Play release. No upload keystore
+has been created. Before generating a signed Android App Bundle (`.aab`), create
+and back up an upload key, keep it private, and do not commit it. The project
+ignores `android-keystore`, keystore files, and generated APK/AAB outputs.
+
+The Bubblewrap PWA quality audit could not complete because Google's PageSpeed
+Insights API returned HTTP 429. Before release:
+
 - Set up Digital Asset Links at
   `https://remote-job-finder-w20c.onrender.com/.well-known/assetlinks.json`
   using the final package name and the SHA-256 certificate fingerprint for the
