@@ -396,6 +396,35 @@ class WebUiTests(unittest.TestCase):
         self.assertEqual(json.loads(get_body)[0]["status"], "applied")
         self.assertEqual(persisted_jobs[0]["status"], "applied")
 
+    def test_removed_low_score_tracked_job_drops_from_local_results(self):
+        url = "https://example.com/weak-role"
+        jobs = [{"title": "Generalist", "url": url, "status": "saved"}]
+
+        with tempfile.TemporaryDirectory() as directory:
+            jobs_file = Path(directory) / "jobs.json"
+            jobs_file.write_text(json.dumps(jobs), encoding="utf-8")
+
+            with patch.object(web_ui, "JOBS_FILE", jobs_file):
+                remove_status, remove_body = self.post_json(
+                    "/api/job-status",
+                    {"url": url, "status": "new"}
+                )
+                get_status, _, get_body = self.request("/api/jobs")
+                persisted_jobs = json.loads(jobs_file.read_text(encoding="utf-8"))
+
+        self.assertEqual(remove_status, 200)
+        self.assertEqual(remove_body["status"], "new")
+        self.assertEqual(get_status, 200)
+        self.assertEqual(json.loads(get_body), [])
+        self.assertNotIn("status", persisted_jobs[0])
+
+    def test_browser_status_updates_reload_authoritative_jobs(self):
+        html = (web_ui.PROJECT_DIR / "index.html").read_text(encoding="utf-8")
+        start = html.index("async function changeJobStatus")
+        end = html.index("async function refreshJobs", start)
+
+        self.assertIn("await refreshJobs();", html[start:end])
+
     def test_status_update_rejects_invalid_status(self):
         status, body = self.post_json(
             "/api/job-status",

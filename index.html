@@ -1129,6 +1129,7 @@
                         ? "Job moved to your applied list."
                         : "Job removed from your lists.";
                 renderJobs();
+                await refreshJobs();
             } catch (error) {
                 actionMessage.textContent = error.message;
                 actionMessage.classList.add("error");
